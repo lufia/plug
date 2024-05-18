@@ -10,12 +10,22 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/tools/go/ast/astutil"
 )
 
-func Generate(sym *Sym) string {
+type Overlay struct {
+	Replace map[string]string
+}
+
+type Func struct {
+	decl *ast.FuncDecl
+	file *ast.File
+}
+
+func Generate(sym *Sym) (orig, new string) {
 	pkg := loadPkg(sym.PkgPath())
 	fset := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, pkg.Dir, nil, parser.ParseComments)
@@ -27,35 +37,45 @@ func Generate(sym *Sym) string {
 	if fn == nil {
 		log.Fatal("no func")
 	}
-	fn.Replace(fset)
-	return ""
+
+	path := fset.File(fn.file.Package).Name()
+	file := filepath.Base(path)
+	dir := filepath.Join("mock", sym.PkgPath())
+	os.MkdirAll(dir, 0755)
+	mock := filepath.Join(dir, file)
+	w, err := os.Create(mock)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer w.Close()
+
+	fn.Replace(w, fset)
+	if err := w.Sync(); err != nil {
+		log.Fatal(err)
+	}
+	return path, mock
 }
 
-type Func struct {
-	decl *ast.FuncDecl
-	file *ast.File
-}
-
-func (fn *Func) Replace(fset *token.FileSet) {
+func (fn *Func) Replace(w io.Writer, fset *token.FileSet) {
 	name := fn.decl.Name.Name
 	fn.decl.Name.Name = "_" + name
 	astutil.AddImport(fset, fn.file, "github.com/lufia/mock")
-	if err := format.Node(os.Stdout, fset, fn.file); err != nil {
+	if err := format.Node(w, fset, fn.file); err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Print("func ")
+	fmt.Fprint(w, "func ")
 	if fn.decl.Recv != nil {
 	}
-	fmt.Print(name)
-	fmt.Print("(")
-	printTypeList(os.Stdout, fset, fn.decl.Type.Params)
-	fmt.Print(") (")
-	printTypeList(os.Stdout, fset, fn.decl.Type.Results)
-	fmt.Println(") {")
-	fmt.Printf("\tf := mock.Get(%s)\n", name)
-	fmt.Println("\treturn f(d)")
-	fmt.Println("}")
+	fmt.Fprint(w, name)
+	fmt.Fprint(w, "(")
+	printTypeList(w, fset, fn.decl.Type.Params)
+	fmt.Fprint(w, ") (")
+	printTypeList(w, fset, fn.decl.Type.Results)
+	fmt.Fprintln(w, ") {")
+	fmt.Fprintf(w, "\tf := mock.Get(%s)\n", name)
+	fmt.Fprintln(w, "\treturn f(d)")
+	fmt.Fprintln(w, "}")
 }
 
 func printTypeList(w io.Writer, fset *token.FileSet, l *ast.FieldList) {

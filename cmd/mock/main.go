@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"go/build"
 	"go/parser"
 	"go/token"
 	"log"
+	"os"
 )
 
 func main() {
@@ -19,9 +21,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	var o Overlay
+	o.Replace = make(map[string]string)
 	syms := FindMockSetInPkgs(pkgs)
 	for _, sym := range syms {
-		Generate(sym)
+		orig, new := Generate(sym)
+		o.Replace[orig] = new
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(&o); err != nil {
+		log.Fatal(err)
 	}
 }
 
