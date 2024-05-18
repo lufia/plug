@@ -32,7 +32,7 @@ func Get[F any](dflt F) F {
 		panic("not function")
 	}
 	pcs := make([]uintptr, 100)
-    n := runtime.Callers(1, pcs)
+	n := runtime.Callers(1, pcs)
 	pcs = pcs[:n]
 
 	callers := make([]uintptr, 0, len(pcs))
