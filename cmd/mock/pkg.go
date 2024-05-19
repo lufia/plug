@@ -70,10 +70,15 @@ func findFunc(f *File, sym *Sym) *ast.FuncDecl {
 
 func matchFunc(sym *Sym, decl *ast.FuncDecl) bool {
 	typeName, funcName := sym.Func()
-	switch typeName {
-	case "":
+	if typeName == "" {
 		return decl.Recv == nil && decl.Name.Name == funcName
-	default:
-		return decl.Recv != nil
 	}
+	if decl.Recv == nil || len(decl.Recv.List) != 1 {
+		return false
+	}
+	t, ok := decl.Recv.List[0].Type.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	return t.Name == typeName
 }

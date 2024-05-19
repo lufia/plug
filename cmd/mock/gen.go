@@ -66,15 +66,29 @@ func (fn *Func) Replace(w io.Writer, fset *token.FileSet) {
 
 	fmt.Fprint(w, "func ")
 	if fn.decl.Recv != nil {
+		recv := fn.decl.Recv.List[0]
+		fmt.Fprint(w, "(%s) ", recvTypeStr(recv.Type))
 	}
 	fmt.Fprint(w, name)
+	if fn.decl.Type.TypeParams != nil {
+		fmt.Fprint(w, "[")
+		printTypeList(w, fset, fn.decl.Type.TypeParams)
+		fmt.Fprint(w, "]")
+	}
 	fmt.Fprint(w, "(")
 	printTypeList(w, fset, fn.decl.Type.Params)
 	fmt.Fprint(w, ") (")
 	printTypeList(w, fset, fn.decl.Type.Results)
 	fmt.Fprintln(w, ") {")
 	fmt.Fprintf(w, "\tf := mock.Get(%s)\n", fn.decl.Name.Name)
-	fmt.Fprintln(w, "\treturn f(d)")
+	var args []string
+	for _, l := range fn.decl.Type.Params.List {
+		names := Map(l.Names, func(i *ast.Ident) string {
+			return i.Name
+		})
+		args = append(args, names...)
+	}
+	fmt.Fprintf(w, "\treturn f(%s)\n", strings.Join(args, ", "))
 	fmt.Fprintln(w, "}")
 }
 
@@ -83,14 +97,27 @@ func printTypeList(w io.Writer, fset *token.FileSet, l *ast.FieldList) error {
 		return nil
 	}
 	for _, arg := range l.List {
-		names := make([]string, len(arg.Names))
-		for i, name := range arg.Names {
-			names[i] = name.Name
-		}
+		names := Map(arg.Names, func(i *ast.Ident) string {
+			return i.Name
+		})
 		fmt.Fprintf(w, "%s ", strings.Join(names, ", "))
 		if err := printer.Fprint(w, fset, arg.Type); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func recvTypeStr(expr ast.Expr) string {
+	var s string
+	for {
+		switch p := expr.(type) {
+		case *ast.Ident:
+			return s + p.Name
+		case *ast.UnaryExpr:
+			s = "*"
+		default:
+			panic(p)
+		}
+	}
 }
