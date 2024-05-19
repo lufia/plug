@@ -80,7 +80,7 @@ func (fn *Func) Replace(w io.Writer, fset *token.FileSet) {
 	fmt.Fprint(w, ") (")
 	printTypeList(w, fset, fn.decl.Type.Results)
 	fmt.Fprintln(w, ") {")
-	fmt.Fprintf(w, "\tf := mock.Get(%s)\n", fn.decl.Name.Name)
+	fmt.Fprintf(w, "\tf := mock.Get(%s, %s)\n", name, fn.decl.Name.Name)
 	var args []string
 	for _, l := range fn.decl.Type.Params.List {
 		names := Map(l.Names, func(i *ast.Ident) string {

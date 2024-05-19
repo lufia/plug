@@ -1,11 +1,11 @@
 package mock
 
 func Set[F any](f, m F) {
-	NewScope(1).Set(f, m)
+	NewScope(1).set(f, m)
 }
 
-func Get[F any](dflt F) F {
-	return NewScope(1).Get(dflt).(F)
+func Get[F any](f, dflt F) F {
+	return NewScope(1).get(f, dflt).(F)
 }
 
 func Cleanup() {

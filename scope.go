@@ -3,6 +3,7 @@ package mock
 import (
 	"reflect"
 	"runtime"
+	"slices"
 )
 
 type Scope struct {
@@ -14,6 +15,7 @@ type Scope struct {
 
 type frame struct {
 	file  string
+	line  int
 	entry uintptr
 }
 
@@ -27,12 +29,13 @@ func init() {
 
 func NewScope(skip int) *Scope {
 	frames := getFrames(skip + 1)
+	slices.Reverse(frames)
 	return lookupScope(&root, frames)
 }
 
 func getFrames(skip int) []*frame {
-	pc := make([]uintptr, 100) // TODO: grow
-	n := runtime.Callers(skip+1, pc)
+	pc := make([]uintptr, 100)       // TODO: grow
+	n := runtime.Callers(skip+2, pc) // +1: Callers, +1: getFrames
 	pc = pc[:n]
 	frames := runtime.CallersFrames(pc)
 
@@ -41,6 +44,7 @@ func getFrames(skip int) []*frame {
 		f, more := frames.Next()
 		a = append(a, &frame{
 			file:  f.File,
+			line:  f.Line,
 			entry: f.Entry,
 		})
 		if !more {
@@ -62,6 +66,7 @@ func lookupScope(s *Scope, frames []*frame) *Scope {
 		entry:  frame.entry,
 		parent: s,
 		refers: make(map[uintptr]*Scope),
+		mocks:  make(map[uintptr]any),
 	}
 	s.refers[frame.entry] = p
 	return lookupScope(p, frames)
@@ -76,8 +81,9 @@ func (s *Scope) Delete() {
 	s.parent = nil
 }
 
-func (s *Scope) Get(dflt any) any {
-	v := mustFunc(dflt)
+func (s *Scope) get(f, dflt any) any {
+	v := mustFunc(f)
+	mustFunc(dflt)
 	for s != &root {
 		m := s.mocks[v.Pointer()]
 		if m != nil {
@@ -88,7 +94,7 @@ func (s *Scope) Get(dflt any) any {
 	return dflt
 }
 
-func (s *Scope) Set(f, m any) {
+func (s *Scope) set(f, m any) {
 	v := mustFunc(f)
 	mustFunc(m)
 	s.mocks[v.Pointer()] = m
