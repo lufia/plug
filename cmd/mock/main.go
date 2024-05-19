@@ -3,11 +3,29 @@ package main
 import (
 	"encoding/json"
 	"go/build"
-	"go/parser"
-	"go/token"
 	"log"
 	"os"
 )
+
+type Overlay struct {
+	Replace map[string]string
+}
+
+func (o *Overlay) Add(old, new string) {
+	if o.Replace == nil {
+		o.Replace = make(map[string]string)
+	}
+	o.Replace[old] = new
+}
+
+type Group struct {
+	f    *File
+	syms []*Sym
+}
+
+func (g *Group) Add(sym *Sym) {
+	g.syms = append(g.syms, sym)
+}
 
 func main() {
 	log.SetFlags(0)
@@ -16,27 +34,49 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, target.Dir, nil, 0)
+
+	syms, err := FindMockSyms(target.Dir)
 	if err != nil {
 		log.Fatal(err)
 	}
+	pkgs := GroupSyms(syms)
+
 	var o Overlay
-	o.Replace = make(map[string]string)
-	syms := FindMockSetInPkgs(pkgs)
-	for _, sym := range syms {
-		orig, new := Generate(sym)
-		o.Replace[orig] = new
+	for _, m := range pkgs {
+		for filePath, g := range m {
+			s, err := ReplaceSyms(g.f, g.syms)
+			if err != nil {
+				log.Fatal(err)
+			}
+			o.Add(filePath, s)
+		}
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(&o); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func loadPkg(pkgPath string) *build.Package {
-	pkg, err := build.Default.Import(pkgPath, ".", 0)
-	if err != nil {
-		log.Fatal(err)
+// GroupSyms returns a map of groups indexed pkgPath -> filePath.
+func GroupSyms(syms []*Sym) map[string]map[string]*Group {
+	pkgs := make(map[string]map[string]*Group)
+	for _, sym := range syms {
+		pkgPath := sym.PkgPath()
+		pkg, err := LoadPackage(pkgPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fn := pkg.FindFunc(sym)
+		if fn == nil {
+			log.Fatalf("%s is not exist\n", sym)
+		}
+		if pkgs[pkgPath] == nil {
+			pkgs[pkgPath] = make(map[string]*Group)
+		}
+		filePath := fn.f.path
+		if pkgs[pkgPath][filePath] == nil {
+			pkgs[pkgPath][filePath] = &Group{fn.f, nil}
+		}
+		pkgs[pkgPath][filePath].Add(sym)
 	}
-	return pkg
+	return pkgs
 }

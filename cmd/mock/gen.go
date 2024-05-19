@@ -1,10 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/format"
-	"go/parser"
 	"go/printer"
 	"go/token"
 	"io"
@@ -16,53 +16,53 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 )
 
-type Overlay struct {
-	Replace map[string]string
-}
-
-type Func struct {
-	decl *ast.FuncDecl
-	file *ast.File
-}
-
-func Generate(sym *Sym) (orig, new string) {
-	pkg := loadPkg(sym.PkgPath())
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, pkg.Dir, nil, parser.ParseComments)
-	if err != nil {
-		log.Fatal(err)
+func ReplaceSyms(f *File, syms []*Sym) (string, error) {
+	file := filepath.Base(f.path)
+	dir := filepath.Join("mock", f.pkg.path)
+	if err := os.MkdirAll(dir, 0755); err != nil && !os.IsExist(err) {
+		return "", fmt.Errorf("failed to create %s: %w", dir, err)
 	}
-	p := pkgs[pkg.Name]
-	fn := findDecl(p, sym)
-	if fn == nil {
-		log.Fatal("no func")
-	}
-
-	path := fset.File(fn.file.Package).Name()
-	file := filepath.Base(path)
-	dir := filepath.Join("mock", sym.PkgPath())
-	os.MkdirAll(dir, 0755)
-	mock := filepath.Join(dir, file)
-	w, err := os.Create(mock)
+	stub := filepath.Join(dir, file)
+	w, err := os.Create(stub)
 	if err != nil {
-		log.Fatal(err)
+		return "", fmt.Errorf("failed to create %s: %w", stub, err)
 	}
 	defer w.Close()
 
-	fn.Replace(w, fset)
-	if err := w.Sync(); err != nil {
-		log.Fatal(err)
+	if err := rewriteFile(w, f, syms); err != nil {
+		return "", fmt.Errorf("failed to rewrite %s: %w", f.path, err)
 	}
-	return path, mock
+	if err := w.Sync(); err != nil {
+		return "", fmt.Errorf("failed to save a stub: %w", err)
+	}
+	return stub, nil
+}
+
+func rewriteFile(w io.Writer, f *File, syms []*Sym) error {
+	astutil.AddImport(f.pkg.fset, f.f, "github.com/lufia/mock")
+
+	var buf bytes.Buffer
+	for _, sym := range syms {
+		fn := f.pkg.FindFunc(sym)
+		if fn == nil {
+			log.Fatal("no func")
+		}
+		fn.Replace(&buf, f.pkg.fset)
+	}
+	s, err := format.Source(buf.Bytes())
+	if err != nil {
+		return err
+	}
+	if err := format.Node(w, f.pkg.fset, f.f); err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "\n%s", s)
+	return nil
 }
 
 func (fn *Func) Replace(w io.Writer, fset *token.FileSet) {
 	name := fn.decl.Name.Name
 	fn.decl.Name.Name = "_" + name
-	astutil.AddImport(fset, fn.file, "github.com/lufia/mock")
-	if err := format.Node(w, fset, fn.file); err != nil {
-		log.Fatal(err)
-	}
 
 	fmt.Fprint(w, "func ")
 	if fn.decl.Recv != nil {
@@ -73,14 +73,14 @@ func (fn *Func) Replace(w io.Writer, fset *token.FileSet) {
 	fmt.Fprint(w, ") (")
 	printTypeList(w, fset, fn.decl.Type.Results)
 	fmt.Fprintln(w, ") {")
-	fmt.Fprintf(w, "\tf := mock.Get(%s)\n", name)
+	fmt.Fprintf(w, "\tf := mock.Get(%s)\n", fn.decl.Name.Name)
 	fmt.Fprintln(w, "\treturn f(d)")
 	fmt.Fprintln(w, "}")
 }
 
-func printTypeList(w io.Writer, fset *token.FileSet, l *ast.FieldList) {
+func printTypeList(w io.Writer, fset *token.FileSet, l *ast.FieldList) error {
 	if l == nil {
-		return
+		return nil
 	}
 	for _, arg := range l.List {
 		names := make([]string, len(arg.Names))
@@ -89,33 +89,8 @@ func printTypeList(w io.Writer, fset *token.FileSet, l *ast.FieldList) {
 		}
 		fmt.Fprintf(w, "%s ", strings.Join(names, ", "))
 		if err := printer.Fprint(w, fset, arg.Type); err != nil {
-			log.Fatal(err)
-		}
-	}
-}
-
-func findDecl(pkg *ast.Package, sym *Sym) *Func {
-	for _, f := range pkg.Files {
-		for _, d := range f.Decls {
-			decl, ok := d.(*ast.FuncDecl)
-			if !ok {
-				continue
-			}
-			if matchFunc(sym, decl) {
-				return &Func{decl: decl, file: f}
-			}
+			return err
 		}
 	}
 	return nil
-}
-
-func matchFunc(sym *Sym, decl *ast.FuncDecl) bool {
-	typeName, funcName := sym.Func()
-	switch typeName {
-	case "":
-		return decl.Recv == nil && decl.Name.Name == funcName
-	default:
-		log.Println(decl.Recv)
-		return decl.Recv != nil
-	}
 }
