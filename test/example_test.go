@@ -2,6 +2,7 @@ package test
 
 import (
 	"fmt"
+	"os"
 	"os/user"
 	"time"
 
@@ -20,10 +21,19 @@ func Example_timeNow() {
 
 func Example_osUserCurrent() {
 	mock.Set(user.Current, func() (*user.User, error) {
-		return &user.User{Uid: "100", Gid: "200", Username: "mock"}, nil
+		return &user.User{Uid: "100", Username: "mock"}, nil
 	})
 	u, _ := user.Current()
 	fmt.Println(u.Username, u.Uid)
 	// Output: mock 100
+	mock.Cleanup()
+}
+
+func Example_osGetpid() {
+	mock.Set(os.Getpid, func() int {
+		return 1
+	})
+	fmt.Println(os.Getpid())
+	// Output: 1
 	mock.Cleanup()
 }
