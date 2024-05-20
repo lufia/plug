@@ -96,7 +96,10 @@ func printTypeList(w io.Writer, fset *token.FileSet, l *ast.FieldList) error {
 	if l == nil {
 		return nil
 	}
-	for _, arg := range l.List {
+	for i, arg := range l.List {
+		if i > 0 {
+			fmt.Fprint(w, ", ")
+		}
 		names := Map(arg.Names, func(i *ast.Ident) string {
 			return i.Name
 		})
