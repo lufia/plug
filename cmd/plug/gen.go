@@ -22,7 +22,7 @@ type Stub struct { // Plug?
 func Rewrite(stub *Stub) (string, error) {
 	filePath := stub.f.path
 	name := filepath.Base(filePath)
-	dir := filepath.Join("mock", stub.f.pkg.path)
+	dir := filepath.Join("plug", stub.f.pkg.path)
 	if err := os.MkdirAll(dir, 0755); err != nil && !os.IsExist(err) {
 		return "", fmt.Errorf("failed to create %s: %w", dir, err)
 	}
@@ -44,7 +44,7 @@ func Rewrite(stub *Stub) (string, error) {
 
 func rewriteFile(w io.Writer, stub *Stub) error {
 	fset := stub.f.pkg.c.Fset
-	astutil.AddImport(fset, stub.f.f, "github.com/lufia/mock")
+	astutil.AddImport(fset, stub.f.f, "github.com/lufia/plug")
 
 	var buf bytes.Buffer
 	for _, fn := range stub.fns {
@@ -86,7 +86,7 @@ func rewriteFunc(w io.Writer, fn *Func) {
 	fmt.Fprint(w, ") (")
 	resultNames := printVars(w, sig.Results())
 	fmt.Fprintln(w, ") {")
-	fmt.Fprintf(w, "\tf := mock.Get(%[1]s%[2]s, %[1]s_%[2]s)\n", recvName, name)
+	fmt.Fprintf(w, "\tf := plug.Get(%[1]s%[2]s, %[1]s_%[2]s)\n", recvName, name)
 	if len(resultNames) == 0 {
 		fmt.Fprintf(w, "\tf(%s)\n", strings.Join(paramNames, ", "))
 	} else {

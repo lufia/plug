@@ -25,7 +25,7 @@ var (
 
 func main() {
 	log.SetFlags(0)
-	log.SetPrefix("mock: ")
+	log.SetPrefix("plug: ")
 	flag.BoolVar(&verbose, "v", false, "enable verbose log")
 	flag.Parse()
 
@@ -34,7 +34,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	syms, err := FindMockSyms(target.Dir)
+	syms, err := FindPlugSyms(target.Dir)
 	if err != nil {
 		log.Fatal(err)
 	}

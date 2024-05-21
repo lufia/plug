@@ -1,12 +1,20 @@
-# mock
+# plug
 
 ## Usage
 
+See [examples](https://github.com/lufia/plug/blob/main/test/example_test.go).
+
 ```sh
-go test -overlay <(go run github.com/lufia/mock/cmd/mock@latest)
+go test -overlay <(go run github.com/lufia/plug/cmd/plug@latest)
 ```
 
-## Limitation
+Then add below to **.gitignore**
 
-* cyclic import
-* `go:linkname`
+```txt
+plug
+```
+
+## Limitations
+
+* cyclic import: runtime, reflect, etc.
+* **go:linkname** functions: *time.Sleep*, etc.

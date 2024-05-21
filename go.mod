@@ -1,4 +1,4 @@
-module github.com/lufia/mock
+module github.com/lufia/plug
 
 go 1.22.3
 

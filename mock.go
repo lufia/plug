@@ -1,4 +1,4 @@
-package mock
+package plug
 
 func Set[F any](f, m F) {
 	newScope(1).set(f, m)

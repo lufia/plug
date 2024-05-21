@@ -20,5 +20,4 @@
 # Go workspace file
 go.work
 
-/test/mock
-/test/overlay.json
+/test/plug

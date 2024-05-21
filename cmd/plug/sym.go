@@ -35,7 +35,7 @@ func (m *Sym) String() string {
 	return strings.Join(a, ".")
 }
 
-func FindMockSyms(dir string) ([]*Sym, error) {
+func FindPlugSyms(dir string) ([]*Sym, error) {
 	fset := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, dir, nil, 0)
 	if err != nil {
@@ -64,7 +64,7 @@ func FindMockSyms(dir string) ([]*Sym, error) {
 			if err != nil {
 				return nil, err
 			}
-			for s := range findMockSyms(&info, fset, f, m) {
+			for s := range findPlugSyms(&info, fset, f, m) {
 				syms = append(syms, s)
 			}
 		}
@@ -72,14 +72,14 @@ func FindMockSyms(dir string) ([]*Sym, error) {
 	return syms, nil
 }
 
-func findMockSyms(info *types.Info, fset *token.FileSet, f *ast.File, m map[string]string) <-chan *Sym {
+func findPlugSyms(info *types.Info, fset *token.FileSet, f *ast.File, m map[string]string) <-chan *Sym {
 	c := make(chan *Sym)
 	w := walker(func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
-		if !isMockSet(call.Fun) || len(call.Args) != 2 {
+		if !isPlugSet(call.Fun) || len(call.Args) != 2 {
 			return true
 		}
 		if verbose {
@@ -154,7 +154,7 @@ func parseExpr(info *types.Info, expr ast.Expr) (pkgName, typeName, funcName str
 	}
 }
 
-func isMockSet(expr ast.Expr) bool {
+func isPlugSet(expr ast.Expr) bool {
 	sel, ok := expr.(*ast.SelectorExpr)
 	if !ok {
 		return false
@@ -163,7 +163,7 @@ func isMockSet(expr ast.Expr) bool {
 	if !ok {
 		return false
 	}
-	return p.Name == "mock" && sel.Sel.Name == "Set"
+	return p.Name == "plug" && sel.Sel.Name == "Set"
 }
 
 type walker func(ast.Node) bool
