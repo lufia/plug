@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"go/ast"
 	"go/build"
+	"go/importer"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"strings"
 )
 
@@ -42,12 +44,27 @@ func FindMockSyms(dir string) ([]*Sym, error) {
 
 	var syms []*Sym
 	for _, pkg := range pkgs {
+		var (
+			config = types.Config{
+				Importer: importer.ForCompiler(fset, "source", nil),
+			}
+			info = types.Info{
+				Types:      make(map[ast.Expr]types.TypeAndValue),
+				Defs:       make(map[*ast.Ident]types.Object),
+				Uses:       make(map[*ast.Ident]types.Object),
+				Selections: make(map[*ast.SelectorExpr]*types.Selection),
+			}
+		)
+		_, err := config.Check(dir, fset, MapValues(pkg.Files), &info)
+		if err != nil {
+			return nil, err
+		}
 		for _, f := range pkg.Files {
 			m, err := importMap(f)
 			if err != nil {
 				return nil, err
 			}
-			for s := range findMockSyms(f, m) {
+			for s := range findMockSyms(&info, fset, f, m) {
 				syms = append(syms, s)
 			}
 		}
@@ -55,7 +72,7 @@ func FindMockSyms(dir string) ([]*Sym, error) {
 	return syms, nil
 }
 
-func findMockSyms(f *ast.File, m map[string]string) <-chan *Sym {
+func findMockSyms(info *types.Info, fset *token.FileSet, f *ast.File, m map[string]string) <-chan *Sym {
 	c := make(chan *Sym)
 	w := walker(func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
@@ -65,7 +82,10 @@ func findMockSyms(f *ast.File, m map[string]string) <-chan *Sym {
 		if !isMockSet(call.Fun) || len(call.Args) != 2 {
 			return true
 		}
-		pkgName, typeName, funcName := parseExpr(call.Args[0])
+		if verbose {
+			ast.Print(fset, call.Args[0])
+		}
+		pkgName, typeName, funcName := parseExpr(info, call.Args[0])
 		c <- &Sym{
 			pkgPath:  m[pkgName],
 			typeName: typeName,
@@ -98,36 +118,39 @@ func importMap(f *ast.File) (map[string]string, error) {
 	return m, nil
 }
 
-func parseExpr(expr ast.Expr) (pkgName, typeName, funcName string) {
+func parseExpr(info *types.Info, expr ast.Expr) (pkgName, typeName, funcName string) {
 	switch t := expr.(type) {
-	case *ast.SelectorExpr:
-		pkgName, typeName = typeStr(t.X)
-		return pkgName, typeName, t.Sel.Name
-	case *ast.Ident:
-		return ".", "", t.Name
-	default:
-		return "", "", ""
-	}
-}
-
-func typeStr(expr ast.Expr) (pkgName, typeName string) {
-	for {
-		switch p := expr.(type) {
-		case *ast.Ident:
-			pkgName = p.Name
-			return pkgName, typeName
-		case *ast.CompositeLit: // T{}
-			expr = p.Type
-		case *ast.ParenExpr: // ()
-			expr = p.X
-		case *ast.UnaryExpr: // &
-			expr = p.X
-		case *ast.SelectorExpr: // a.b
-			typeName = p.Sel.Name
-			expr = p.X
-		default:
-			panic(p)
+	case *ast.SelectorExpr: // X.Sel
+		pkgName, typeName, funcName = parseExpr(info, t.X)
+		switch p := info.ObjectOf(t.Sel).(type) {
+		case *types.Func:
+			pkgName = p.Pkg().Name()
+			funcName = p.Name()
+		case *types.TypeName:
+			pkgName = p.Pkg().Name()
+			typeName = p.Name()
 		}
+		return
+	case *ast.Ident:
+		switch p := info.ObjectOf(t).(type) {
+		case *types.PkgName:
+			pkgName = p.Name()
+			return
+		}
+		pkgName = t.Name
+		return pkgName, typeName, ""
+	case *ast.CompositeLit: // Type{}
+		return parseExpr(info, t.Type)
+	case *ast.ParenExpr: // (X)
+		return parseExpr(info, t.X)
+	case *ast.UnaryExpr: // &X
+		return parseExpr(info, t.X)
+	case *ast.StarExpr: // *X
+		return parseExpr(info, t.X)
+	case *ast.CallExpr: // Fun()
+		return parseExpr(info, t.Fun)
+	default:
+		panic(t)
 	}
 }
 

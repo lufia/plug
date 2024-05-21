@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"go/build"
 	"log"
 	"os"
@@ -18,17 +19,15 @@ func (o *Overlay) Add(old, new string) {
 	o.Replace[old] = new
 }
 
-type Group struct {
-	f    *File
-	syms []*Sym
-}
-
-func (g *Group) Add(sym *Sym) {
-	g.syms = append(g.syms, sym)
-}
+var (
+	verbose bool
+)
 
 func main() {
 	log.SetFlags(0)
+	log.SetPrefix("mock: ")
+	flag.BoolVar(&verbose, "v", false, "enable verbose log")
+	flag.Parse()
 
 	target, err := build.Default.Import(".", ".", 0)
 	if err != nil {
@@ -39,44 +38,41 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	pkgs := GroupSyms(syms)
+	stubs := Group(syms)
 
 	var o Overlay
-	for _, m := range pkgs {
-		for filePath, g := range m {
-			s, err := ReplaceSyms(g.f, g.syms)
-			if err != nil {
-				log.Fatal(err)
-			}
-			o.Add(filePath, s)
+	for filePath, stub := range stubs {
+		s, err := Rewrite(stub)
+		if err != nil {
+			log.Fatal(err)
 		}
+		o.Add(filePath, s)
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(&o); err != nil {
 		log.Fatal(err)
 	}
 }
 
-// GroupSyms returns a map of groups indexed pkgPath -> filePath.
-func GroupSyms(syms []*Sym) map[string]map[string]*Group {
-	pkgs := make(map[string]map[string]*Group)
+// Group returns a map of Stub indexed by filePath.
+func Group(syms []*Sym) map[string]*Stub {
+	stubs := make(map[string]*Stub)
 	for _, sym := range syms {
 		pkgPath := sym.PkgPath()
 		pkg, err := LoadPackage(pkgPath)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("failed to load package %s: %v\n", pkgPath, err)
 		}
-		fn := pkg.FindFunc(sym)
+		fn := pkg.Lookup(sym)
 		if fn == nil {
 			log.Fatalf("%s is not exist\n", sym)
 		}
-		if pkgs[pkgPath] == nil {
-			pkgs[pkgPath] = make(map[string]*Group)
+		f := fn.File()
+		stub, ok := stubs[f.path]
+		if !ok {
+			stub = &Stub{f: f}
+			stubs[f.path] = stub
 		}
-		filePath := fn.f.path
-		if pkgs[pkgPath][filePath] == nil {
-			pkgs[pkgPath][filePath] = &Group{fn.f, nil}
-		}
-		pkgs[pkgPath][filePath].Add(sym)
+		stub.fns = append(stub.fns, fn)
 	}
-	return pkgs
+	return stubs
 }

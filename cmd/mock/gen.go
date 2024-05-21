@@ -3,12 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"go/ast"
 	"go/format"
-	"go/printer"
-	"go/token"
+	"go/types"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,111 +13,108 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 )
 
-func ReplaceSyms(f *File, syms []*Sym) (string, error) {
-	file := filepath.Base(f.path)
-	dir := filepath.Join("mock", f.pkg.path)
+type Stub struct { // Plug?
+	f   *File
+	fns []*Func
+}
+
+// func Rewrite(pkg *Pkg, f *ast.File, fns []*Func) (string, error) {
+func Rewrite(stub *Stub) (string, error) {
+	filePath := stub.f.path
+	name := filepath.Base(filePath)
+	dir := filepath.Join("mock", stub.f.pkg.path)
 	if err := os.MkdirAll(dir, 0755); err != nil && !os.IsExist(err) {
 		return "", fmt.Errorf("failed to create %s: %w", dir, err)
 	}
-	stub := filepath.Join(dir, file)
-	w, err := os.Create(stub)
+	file := filepath.Join(dir, name)
+	w, err := os.Create(file)
 	if err != nil {
-		return "", fmt.Errorf("failed to create %s: %w", stub, err)
+		return "", fmt.Errorf("failed to create %s: %w", file, err)
 	}
 	defer w.Close()
 
-	if err := rewriteFile(w, f, syms); err != nil {
-		return "", fmt.Errorf("failed to rewrite %s: %w", f.path, err)
+	if err := rewriteFile(w, stub); err != nil {
+		return "", fmt.Errorf("failed to rewrite %s: %w", filePath, err)
 	}
 	if err := w.Sync(); err != nil {
 		return "", fmt.Errorf("failed to save a stub: %w", err)
 	}
-	return stub, nil
+	return file, nil
 }
 
-func rewriteFile(w io.Writer, f *File, syms []*Sym) error {
-	astutil.AddImport(f.pkg.fset, f.f, "github.com/lufia/mock")
+func rewriteFile(w io.Writer, stub *Stub) error {
+	fset := stub.f.pkg.c.Fset
+	astutil.AddImport(fset, stub.f.f, "github.com/lufia/mock")
 
 	var buf bytes.Buffer
-	for _, sym := range syms {
-		fn := f.pkg.FindFunc(sym)
-		if fn == nil {
-			log.Fatal("no func")
-		}
-		fn.Replace(&buf, f.pkg.fset)
+	for _, fn := range stub.fns {
+		rewriteFunc(&buf, fn)
 	}
 	s, err := format.Source(buf.Bytes())
 	if err != nil {
 		return err
 	}
-	if err := format.Node(w, f.pkg.fset, f.f); err != nil {
+	if verbose {
+		fmt.Printf("====\n%s\n====\n", s)
+	}
+	if err := format.Node(w, fset, stub.f.f); err != nil {
 		return err
 	}
 	fmt.Fprintf(w, "\n%s", s)
 	return nil
 }
 
-func (fn *Func) Replace(w io.Writer, fset *token.FileSet) {
-	name := fn.decl.Name.Name
-	fn.decl.Name.Name = "_" + name
+func rewriteFunc(w io.Writer, fn *Func) {
+	name := fn.fn.Name()
+	fn.Rename("_" + name)
 
+	sig := fn.fn.Type().(*types.Signature)
 	fmt.Fprint(w, "func ")
-	if fn.decl.Recv != nil {
-		recv := fn.decl.Recv.List[0]
-		fmt.Fprint(w, "(%s) ", recvTypeStr(recv.Type))
+	recvName := ""
+	if recv := sig.Recv(); recv != nil {
+		s := typeStr(recv.Type().Underlying())
+		fmt.Fprintf(w, "(%s %s) ", recv.Name(), s)
+		recvName = recv.Name() + "."
+		// TODO(lufia): sig.RecvTypeParams
 	}
 	fmt.Fprint(w, name)
-	if fn.decl.Type.TypeParams != nil {
-		fmt.Fprint(w, "[")
-		printTypeList(w, fset, fn.decl.Type.TypeParams)
-		fmt.Fprint(w, "]")
-	}
+
+	// TODO(lufia): sig.TypeParams
+
 	fmt.Fprint(w, "(")
-	printTypeList(w, fset, fn.decl.Type.Params)
+	paramNames := printVars(w, sig.Params())
 	fmt.Fprint(w, ") (")
-	printTypeList(w, fset, fn.decl.Type.Results)
+	resultNames := printVars(w, sig.Results())
 	fmt.Fprintln(w, ") {")
-	fmt.Fprintf(w, "\tf := mock.Get(%s, %s)\n", name, fn.decl.Name.Name)
-	var args []string
-	for _, l := range fn.decl.Type.Params.List {
-		names := Map(l.Names, func(i *ast.Ident) string {
-			return i.Name
-		})
-		args = append(args, names...)
+	fmt.Fprintf(w, "\tf := mock.Get(%[1]s%[2]s, %[1]s_%[2]s)\n", recvName, name)
+	if len(resultNames) == 0 {
+		fmt.Fprintf(w, "\tf(%s)\n", strings.Join(paramNames, ", "))
+	} else {
+		fmt.Fprintf(w, "\treturn f(%s)\n", strings.Join(paramNames, ", "))
 	}
-	fmt.Fprintf(w, "\treturn f(%s)\n", strings.Join(args, ", "))
 	fmt.Fprintln(w, "}")
 }
 
-func printTypeList(w io.Writer, fset *token.FileSet, l *ast.FieldList) error {
-	if l == nil {
+func printVars(w io.Writer, vars *types.Tuple) []string {
+	if vars == nil {
 		return nil
 	}
-	for i, arg := range l.List {
-		if i > 0 {
-			fmt.Fprint(w, ", ")
-		}
-		names := Map(arg.Names, func(i *ast.Ident) string {
-			return i.Name
-		})
-		fmt.Fprintf(w, "%s ", strings.Join(names, ", "))
-		if err := printer.Fprint(w, fset, arg.Type); err != nil {
-			return err
-		}
+	a := make([]string, vars.Len())
+	for i := range vars.Len() {
+		v := vars.At(i)
+		a[i] = v.Name()
+		fmt.Fprintf(w, "%s %s,", v.Name(), typeStr(v.Type()))
 	}
-	return nil
+	return a
 }
 
-func recvTypeStr(expr ast.Expr) string {
-	var s string
-	for {
-		switch p := expr.(type) {
-		case *ast.Ident:
-			return s + p.Name
-		case *ast.UnaryExpr:
-			s = "*"
-		default:
-			panic(p)
-		}
+func typeStr(t types.Type) string {
+	switch v := t.(type) {
+	case *types.Named:
+		return types.TypeString(v, types.RelativeTo(v.Obj().Pkg()))
+	case *types.Pointer:
+		return "*" + typeStr(v.Elem())
+	default:
+		return t.String()
 	}
 }

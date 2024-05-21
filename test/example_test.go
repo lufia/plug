@@ -2,6 +2,7 @@ package test
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"os/user"
 	"time"
@@ -26,6 +27,16 @@ func Example_osUserCurrent() {
 	u, _ := user.Current()
 	fmt.Println(u.Username, u.Uid)
 	// Output: mock 100
+	mock.Cleanup()
+}
+
+func Example_netHttpClientDo() {
+	mock.Set((*http.Client)(nil).Do, func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200}, nil
+	})
+	resp, _ := http.Get("https://example.com")
+	fmt.Println(resp.StatusCode)
+	// Output: 200
 	mock.Cleanup()
 }
 

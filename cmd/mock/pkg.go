@@ -2,14 +2,16 @@ package main
 
 import (
 	"go/ast"
-	"go/build"
 	"go/parser"
-	"go/token"
+	"go/types"
+	"slices"
+
+	"golang.org/x/tools/go/loader"
 )
 
 type Pkg struct {
-	p    *ast.Package
-	fset *token.FileSet
+	*loader.PackageInfo
+	c    *loader.Config
 	path string
 }
 
@@ -20,65 +22,82 @@ type File struct {
 }
 
 type Func struct {
-	decl *ast.FuncDecl
-	f    *File
+	pkg  *Pkg
+	file string
+	fn   *types.Func
 }
 
 func LoadPackage(pkgPath string) (*Pkg, error) {
-	p, err := build.Default.Import(pkgPath, ".", 0)
+	c := loader.Config{
+		ParserMode: parser.ParseComments,
+	}
+	c.Import(pkgPath)
+	p, err := c.Load()
 	if err != nil {
 		return nil, err
 	}
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, p.Dir, nil, parser.ParseComments)
-	if err != nil {
-		return nil, err
-	}
-	return &Pkg{pkgs[p.Name], fset, pkgPath}, nil
+	pkg := p.Package(pkgPath)
+	return &Pkg{pkg, &c, pkgPath}, nil
 }
 
-func (pkg *Pkg) Files() []*File {
-	var a []*File
-	for _, f := range pkg.p.Files {
-		filePath := pkg.fset.File(f.Package).Name()
-		a = append(a, &File{pkg, f, filePath})
-	}
-	return a
-}
-
-func (pkg *Pkg) FindFunc(sym *Sym) *Func {
-	for _, f := range pkg.Files() {
-		if decl := findFunc(f, sym); decl != nil {
-			return &Func{decl, f}
+func (pkg *Pkg) Lookup(sym *Sym) *Func {
+	typeName, funcName := sym.Func()
+	var obj types.Object
+	switch typeName {
+	case "":
+		obj = pkg.Pkg.Scope().Lookup(funcName)
+	default:
+		p := pkg.Pkg.Scope().Lookup(typeName).Type().(*types.Named)
+		if p == nil {
+			return nil
+		}
+		for i := range p.NumMethods() {
+			m := p.Method(i)
+			if m.Name() == funcName {
+				obj = m
+				break
+			}
 		}
 	}
-	return nil
+	fn, ok := obj.(*types.Func)
+	if !ok {
+		return nil
+	}
+	f := pkg.c.Fset.File(fn.Pos())
+	return &Func{pkg, f.Name(), fn}
 }
 
-func findFunc(f *File, sym *Sym) *ast.FuncDecl {
+func (pkg *Pkg) File(name string) *File {
+	i := slices.IndexFunc(pkg.Files, func(e *ast.File) bool {
+		// e.Name is the name of the package.
+		// Thus we should get filename of e from token.FileSet.
+		f := pkg.c.Fset.File(e.Pos())
+		return f.Name() == name
+	})
+	if i < 0 {
+		return nil
+	}
+	f := pkg.Files[i]
+	return &File{pkg, f, pkg.c.Fset.File(f.Package).Name()}
+}
+
+func (fn *Func) File() *File {
+	return fn.pkg.File(fn.file)
+}
+
+func (fn *Func) Rename(name string) {
+	f := fn.File()
+	if f == nil {
+		panic("unrelated file?")
+	}
 	for _, d := range f.f.Decls {
 		decl, ok := d.(*ast.FuncDecl)
 		if !ok {
 			continue
 		}
-		if matchFunc(sym, decl) {
-			return decl
+		if f.pkg.Defs[decl.Name] == fn.fn {
+			decl.Name.Name = name
+			return
 		}
 	}
-	return nil
-}
-
-func matchFunc(sym *Sym, decl *ast.FuncDecl) bool {
-	typeName, funcName := sym.Func()
-	if typeName == "" {
-		return decl.Recv == nil && decl.Name.Name == funcName
-	}
-	if decl.Recv == nil || len(decl.Recv.List) != 1 {
-		return false
-	}
-	t, ok := decl.Recv.List[0].Type.(*ast.Ident)
-	if !ok {
-		return false
-	}
-	return t.Name == typeName
 }
