@@ -27,7 +27,7 @@ func init() {
 	root.refers = make(map[uintptr]*Scope)
 }
 
-func NewScope(skip int) *Scope {
+func newScope(skip int) *Scope {
 	frames := getFrames(skip + 1)
 	slices.Reverse(frames)
 	return lookupScope(&root, frames)
