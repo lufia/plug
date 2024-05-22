@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"go/build"
 	"log"
 	"os"
 )
@@ -29,12 +28,7 @@ func main() {
 	flag.BoolVar(&verbose, "v", false, "enable verbose log")
 	flag.Parse()
 
-	target, err := build.Default.Import(".", ".", 0)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	syms, err := FindPlugSyms(target.Dir)
+	syms, err := FindPlugSyms("github.com/lufia/plug/test") // TODO: fix
 	if err != nil {
 		log.Fatal(err)
 	}
