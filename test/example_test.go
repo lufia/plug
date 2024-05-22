@@ -2,6 +2,7 @@ package test
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"os/user"
@@ -55,4 +56,15 @@ func Example_osGetpid() {
 	})
 	fmt.Println(os.Getpid())
 	// Output: 1
+}
+
+func Example_mathRandV2N() {
+	scope := plug.CurrentScope()
+	defer scope.Delete()
+
+	plug.SetT1(rand.N[int], func(n int) int {
+		return 3
+	}, 0)
+	fmt.Println(rand.N[int](10))
+	// Output: 3
 }

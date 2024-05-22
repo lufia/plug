@@ -18,7 +18,6 @@ type Stub struct { // Plug?
 	fns []*Func
 }
 
-// func Rewrite(pkg *Pkg, f *ast.File, fns []*Func) (string, error) {
 func Rewrite(stub *Stub) (string, error) {
 	filePath := stub.f.path
 	name := filepath.Base(filePath)
@@ -79,14 +78,24 @@ func rewriteFunc(w io.Writer, fn *Func) {
 	}
 	fmt.Fprint(w, name)
 
-	// TODO(lufia): sig.TypeParams
+	var typeParams []string
+	if params := sig.TypeParams(); params != nil {
+		fmt.Fprint(w, "[")
+		typeParams = printTypeParams(w, params)
+		fmt.Fprint(w, "]")
+	}
 
 	fmt.Fprint(w, "(")
 	paramNames := printVars(w, sig.Params())
 	fmt.Fprint(w, ") (")
 	resultNames := printVars(w, sig.Results())
 	fmt.Fprintln(w, ") {")
-	fmt.Fprintf(w, "\tf := plug.Get(%[1]s%[2]s, %[1]s_%[2]s)\n", recvName, name)
+	if len(typeParams) == 0 {
+		fmt.Fprintf(w, "\tf := plug.Get(%[1]s%[2]s, %[1]s_%[2]s)\n", recvName, name)
+	} else {
+		s := strings.Join(typeParams, ", ")
+		fmt.Fprintf(w, "\tf := plug.Get(%[1]s%[2]s[%[3]s], %[1]s_%[2]s[%[3]s])\n", recvName, name, s)
+	}
 	if len(resultNames) == 0 {
 		fmt.Fprintf(w, "\tf(%s)\n", strings.Join(paramNames, ", "))
 	} else {
@@ -104,6 +113,16 @@ func printVars(w io.Writer, vars *types.Tuple) []string {
 		v := vars.At(i)
 		a[i] = v.Name()
 		fmt.Fprintf(w, "%s %s,", v.Name(), typeStr(v.Type()))
+	}
+	return a
+}
+
+func printTypeParams(w io.Writer, params *types.TypeParamList) []string {
+	a := make([]string, params.Len())
+	for i := range params.Len() {
+		v := params.At(i)
+		a[i] = v.Obj().Name()
+		fmt.Fprintf(w, "%s %s,", v.Obj().Name(), typeStr(v.Constraint()))
 	}
 	return a
 }

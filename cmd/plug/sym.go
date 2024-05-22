@@ -15,6 +15,7 @@ type Sym struct {
 	pkgPath  string
 	typeName string
 	funcName string
+	typeParams []string
 }
 
 func (m *Sym) PkgPath() string {
@@ -79,7 +80,7 @@ func findPlugSyms(info *types.Info, fset *token.FileSet, f *ast.File, m map[stri
 		if !ok {
 			return true
 		}
-		if !isPlugSet(call.Fun) || len(call.Args) != 2 {
+		if !isPlugSet(call.Fun) || len(call.Args) < 2 {
 			return true
 		}
 		if verbose {
@@ -145,6 +146,8 @@ func parseExpr(info *types.Info, expr ast.Expr) (pkgName, typeName, funcName str
 		return parseExpr(info, t.X)
 	case *ast.UnaryExpr: // &X
 		return parseExpr(info, t.X)
+	case *ast.IndexExpr: // X[Index]
+		return parseExpr(info, t.X)
 	case *ast.StarExpr: // *X
 		return parseExpr(info, t.X)
 	case *ast.CallExpr: // Fun()
@@ -163,7 +166,7 @@ func isPlugSet(expr ast.Expr) bool {
 	if !ok {
 		return false
 	}
-	return p.Name == "plug" && sel.Sel.Name == "Set"
+	return p.Name == "plug" && strings.HasPrefix(sel.Sel.Name, "Set")
 }
 
 type walker func(ast.Node) bool
