@@ -10,7 +10,7 @@ type Scope struct {
 	entry  uintptr
 	parent *Scope
 	refers map[uintptr]*Scope
-	mocks  map[uintptr]any
+	mocks  map[symbolKey]any
 }
 
 type frame struct {
@@ -66,7 +66,7 @@ func lookupScope(s *Scope, frames []*frame) *Scope {
 		entry:  frame.entry,
 		parent: s,
 		refers: make(map[uintptr]*Scope),
-		mocks:  make(map[uintptr]any),
+		mocks:  make(map[symbolKey]any),
 	}
 	s.refers[frame.entry] = p
 	return lookupScope(p, frames)
@@ -81,23 +81,21 @@ func (s *Scope) Delete() {
 	s.parent = nil
 }
 
-func (s *Scope) get(f, dflt any) any {
-	v := mustFunc(f)
+func (s *Scope) set(key symbolKey, v any) {
+	mustFunc(v)
+	s.mocks[key] = v
+}
+
+func (s *Scope) get(key symbolKey, dflt any) any {
 	mustFunc(dflt)
 	for s != &root {
-		m := s.mocks[v.Pointer()]
-		if m != nil {
-			return m
+		v := s.mocks[key]
+		if v != nil {
+			return v
 		}
 		s = s.parent
 	}
 	return dflt
-}
-
-func (s *Scope) set(f, m any) {
-	v := mustFunc(f)
-	mustFunc(m)
-	s.mocks[v.Pointer()] = m
 }
 
 func mustFunc(f any) reflect.Value {

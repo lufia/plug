@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"go/ast"
 	"go/build"
-	"go/importer"
-	"go/parser"
 	"go/token"
 	"go/types"
 	"strings"
+
+	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/types/typeutil"
 )
 
 type Sym struct {
@@ -35,57 +36,44 @@ func (m *Sym) String() string {
 	return strings.Join(a, ".")
 }
 
-func FindPlugSyms(dir string) ([]*Sym, error) {
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, nil, 0)
+func FindPlugSyms(pkgPath string) ([]*Sym, error) {
+	var c loader.Config
+	c.ImportWithTests(pkgPath)
+	p, err := c.Load()
 	if err != nil {
-		return nil, fmt.Errorf("ParseDir(%q): %w", dir, err)
+		return nil, fmt.Errorf("failed to load %s: %w", pkgPath, err)
 	}
+	pkg := p.Package(pkgPath) // TODO: ${pkgPath}_test
+	//m := pkg.Pkg.Imports()
+	//println("Imports:", len(m), m[1].Path(), m[1].Name())
 
 	var syms []*Sym
-	for _, pkg := range pkgs {
-		var (
-			config = types.Config{
-				Importer: importer.ForCompiler(fset, "source", nil),
-			}
-			info = types.Info{
-				Types:      make(map[ast.Expr]types.TypeAndValue),
-				Defs:       make(map[*ast.Ident]types.Object),
-				Uses:       make(map[*ast.Ident]types.Object),
-				Selections: make(map[*ast.SelectorExpr]*types.Selection),
-			}
-		)
-		_, err := config.Check(dir, fset, MapValues(pkg.Files), &info)
+	for _, f := range pkg.Files {
+		m, err := importMap(f)
 		if err != nil {
 			return nil, err
 		}
-		for _, f := range pkg.Files {
-			m, err := importMap(f)
-			if err != nil {
-				return nil, err
-			}
-			for s := range findPlugSyms(&info, fset, f, m) {
-				syms = append(syms, s)
-			}
+		for s := range findPlugSyms(pkg, c.Fset, f, m) {
+			syms = append(syms, s)
 		}
 	}
 	return syms, nil
 }
 
-func findPlugSyms(info *types.Info, fset *token.FileSet, f *ast.File, m map[string]string) <-chan *Sym {
+func findPlugSyms(pkg *loader.PackageInfo, fset *token.FileSet, f *ast.File, m map[string]string) <-chan *Sym {
 	c := make(chan *Sym)
 	w := walker(func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
-		if !isPlugSet(call.Fun) || len(call.Args) != 2 {
+		if !isPlugFunc(&pkg.Info, call) || len(call.Args) != 2 {
 			return true
 		}
 		if verbose {
-			ast.Print(fset, call.Args[0])
+			ast.Print(fset, call.Args[1])
 		}
-		pkgName, typeName, funcName := parseExpr(info, call.Args[0])
+		pkgName, typeName, funcName := parseExpr(&pkg.Info, call.Args[1])
 		c <- &Sym{
 			pkgPath:  m[pkgName],
 			typeName: typeName,
@@ -145,6 +133,8 @@ func parseExpr(info *types.Info, expr ast.Expr) (pkgName, typeName, funcName str
 		return parseExpr(info, t.X)
 	case *ast.UnaryExpr: // &X
 		return parseExpr(info, t.X)
+	case *ast.IndexExpr: // X[Index]
+		return parseExpr(info, t.X)
 	case *ast.StarExpr: // *X
 		return parseExpr(info, t.X)
 	case *ast.CallExpr: // Fun()
@@ -154,16 +144,15 @@ func parseExpr(info *types.Info, expr ast.Expr) (pkgName, typeName, funcName str
 	}
 }
 
-func isPlugSet(expr ast.Expr) bool {
-	sel, ok := expr.(*ast.SelectorExpr)
-	if !ok {
+func isPlugFunc(info *types.Info, call *ast.CallExpr) bool {
+	obj := typeutil.Callee(info, call)
+	if obj == nil {
 		return false
 	}
-	p, ok := sel.X.(*ast.Ident)
-	if !ok {
+	if obj.Pkg().Path() != "github.com/lufia/plug" || obj.Name() != "Func" {
 		return false
 	}
-	return p.Name == "plug" && sel.Sel.Name == "Set"
+	return true
 }
 
 type walker func(ast.Node) bool
