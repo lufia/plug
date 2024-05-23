@@ -25,6 +25,7 @@ type Func struct {
 	pkg  *Pkg
 	file string
 	fn   *types.Func
+	name string // pkg/path.Object
 }
 
 func LoadPackage(pkgPath string) (*Pkg, error) {
@@ -64,7 +65,7 @@ func (pkg *Pkg) Lookup(sym *Sym) *Func {
 		return nil
 	}
 	f := pkg.c.Fset.File(fn.Pos())
-	return &Func{pkg, f.Name(), fn}
+	return &Func{pkg, f.Name(), fn, sym.String()}
 }
 
 func (pkg *Pkg) File(name string) *File {

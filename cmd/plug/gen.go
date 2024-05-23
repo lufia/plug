@@ -91,10 +91,12 @@ func rewriteFunc(w io.Writer, fn *Func) {
 	resultNames := printVars(w, sig.Results())
 	fmt.Fprintln(w, ") {")
 	if len(typeParams) == 0 {
-		fmt.Fprintf(w, "\tf := plug.Get(%[1]s%[2]s, %[1]s_%[2]s)\n", recvName, name)
+		fmt.Fprintf(w, "\ts := plug.Func(%q, %s_%s)\n", fn.name, recvName, name)
+		fmt.Fprintf(w, "\tf := plug.Get(s, %s_%s)\n", recvName, name)
 	} else {
 		s := strings.Join(typeParams, ", ")
-		fmt.Fprintf(w, "\tf := plug.Get(%[1]s%[2]s[%[3]s], %[1]s_%[2]s[%[3]s])\n", recvName, name, s)
+		fmt.Fprintf(w, "\ts := plug.Func(%q, %s_%s[%s])\n", fn.name, recvName, name, s)
+		fmt.Fprintf(w, "\tf := plug.Get(s, %s_%s[%s])\n", recvName, name, s)
 	}
 	if len(resultNames) == 0 {
 		fmt.Fprintf(w, "\tf(%s)\n", strings.Join(paramNames, ", "))

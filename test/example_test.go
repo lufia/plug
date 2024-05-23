@@ -16,7 +16,8 @@ func Example_timeNow() {
 	defer scope.Delete()
 
 	now := time.Date(2024, time.April, 1, 10, 12, 50, 0, time.UTC)
-	plug.Set(time.Now, func() time.Time {
+	key := plug.Func("time.Now", time.Now)
+	plug.Set(key, func() time.Time {
 		return now
 	})
 	fmt.Println(time.Now().Format(time.RFC3339))
@@ -27,7 +28,8 @@ func Example_osUserCurrent() {
 	scope := plug.CurrentScope()
 	defer scope.Delete()
 
-	plug.Set(user.Current, func() (*user.User, error) {
+	key := plug.Func("os/user.Current", user.Current)
+	plug.Set(key, func() (*user.User, error) {
 		return &user.User{Uid: "100", Username: "user"}, nil
 	})
 	u, _ := user.Current()
@@ -39,7 +41,8 @@ func Example_netHttpClientDo() {
 	scope := plug.CurrentScope()
 	defer scope.Delete()
 
-	plug.Set((*http.Client)(nil).Do, func(req *http.Request) (*http.Response, error) {
+	key := plug.Func("net/http.Client.Do", (*http.Client)(nil).Do)
+	plug.Set(key, func(req *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200}, nil
 	})
 	resp, _ := http.Get("https://example.com")
@@ -51,7 +54,8 @@ func Example_osGetpid() {
 	scope := plug.CurrentScope()
 	defer scope.Delete()
 
-	plug.Set(os.Getpid, func() int {
+	key := plug.Func("os.Getpid", os.Getpid)
+	plug.Set(key, func() int {
 		return 1
 	})
 	fmt.Println(os.Getpid())
@@ -62,9 +66,10 @@ func Example_mathRandV2N() {
 	scope := plug.CurrentScope()
 	defer scope.Delete()
 
-	plug.SetT1(rand.N[int], func(n int) int {
+	key := plug.Func("math/rand/v2.N", rand.N[int])
+	plug.Set(key, func(n int) int {
 		return 3
-	}, 0)
+	})
 	fmt.Println(rand.N[int](10))
 	// Output: 3
 }

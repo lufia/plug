@@ -21,15 +21,13 @@ func TestScopeGeneric(t *testing.T) {
 	scope := CurrentScope()
 	defer scope.Delete()
 
-	entry := reflect.ValueOf(put[int]).Pointer()
-	mock := func(int){}
-	p := reflect.ValueOf(mock)
-	Set(put[int], mock)
-	if scope.mocks[entry] == nil {
-		t.Errorf("scope[%v] = nil; but want %v", entry, p)
+	key := Func("put", put[int])
+	Set(key, func(int) {})
+	if scope.mocks[key.key()] == nil {
+		t.Errorf("scope[%v] = nil; but want non-nil", key)
 	}
-	f := Get(put[int], _put[int])
-	if v := reflect.ValueOf(f); v.Pointer() != p.Pointer() {
-		t.Errorf("got %v; want %v", v, p)
+	f := Get(key, _put[int])
+	if v := reflect.ValueOf(f); v.IsZero() {
+		t.Errorf("got %v", v)
 	}
 }

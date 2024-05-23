@@ -67,14 +67,13 @@ func findPlugSyms(pkg *loader.PackageInfo, fset *token.FileSet, f *ast.File, m m
 		if !ok {
 			return true
 		}
-		name, ok := isPlugSet(&pkg.Info, call)
-		if !ok || len(call.Args) < 2 {
+		if !isPlugFunc(&pkg.Info, call) || len(call.Args) != 2 {
 			return true
 		}
 		if verbose {
-			ast.Print(fset, call.Args[0])
+			ast.Print(fset, call.Args[1])
 		}
-		pkgName, typeName, funcName := parseExpr(&pkg.Info, call.Args[0])
+		pkgName, typeName, funcName := parseExpr(&pkg.Info, call.Args[1])
 		c <- &Sym{
 			pkgPath:  m[pkgName],
 			typeName: typeName,
@@ -145,15 +144,15 @@ func parseExpr(info *types.Info, expr ast.Expr) (pkgName, typeName, funcName str
 	}
 }
 
-func isPlugSet(info *types.Info, call *ast.CallExpr) (string, bool) {
+func isPlugFunc(info *types.Info, call *ast.CallExpr) bool {
 	obj := typeutil.Callee(info, call)
 	if obj == nil {
-		return "", false
+		return false
 	}
-	if obj.Pkg().Path() != "github.com/lufia/plug" || obj.Name() != "Set" {
-		return "", false
+	if obj.Pkg().Path() != "github.com/lufia/plug" || obj.Name() != "Func" {
+		return false
 	}
-	return obj.Name(), true
+	return true
 }
 
 type walker func(ast.Node) bool

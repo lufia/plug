@@ -1,19 +1,29 @@
 package plug
 
-func Set[F any](f, m F) {
-	newScope(1).set(f, m)
+import "reflect"
+
+type symbolKey struct {
+	name string
+	t    reflect.Type
 }
 
-func SetT1[F, T1 any](f, m F, _ T1) {
-	newScope(1).set(f, m)
+type Symbol[T any] symbolKey
+
+func (s *Symbol[T]) key() symbolKey {
+	return symbolKey(*s)
 }
 
-func Get[F any](f, dflt F) F {
-	return newScope(1).get(f, dflt).(F)
+func Func[F any](name string, f F) *Symbol[F] {
+	var zero F
+	return &Symbol[F]{name, reflect.TypeOf(zero)}
 }
 
-func GetT1[F, T1 any](f, dflt F, _ T1) F {
-	return newScope(1).get(f, dflt).(F)
+func Set[T any](s *Symbol[T], v T) {
+	newScope(1).set(s.key(), v)
+}
+
+func Get[T any](s *Symbol[T], dflt T) T {
+	return newScope(1).get(s.key(), dflt).(T)
 }
 
 func CurrentScope() *Scope {
