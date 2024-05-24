@@ -3,8 +3,13 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
+	"path"
+	"path/filepath"
+
+	"golang.org/x/mod/modfile"
 )
 
 type Overlay struct {
@@ -28,7 +33,11 @@ func main() {
 	flag.BoolVar(&verbose, "v", false, "enable verbose log")
 	flag.Parse()
 
-	syms, err := FindPlugSyms("github.com/lufia/plug/test") // TODO: fix
+	pkgPath, err := loadPackagePath(".")
+	if err != nil {
+		log.Fatal(err)
+	}
+	syms, err := FindPlugSyms(pkgPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -45,6 +54,44 @@ func main() {
 	if err := json.NewEncoder(os.Stdout).Encode(&o); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func loadPackagePath(dir string) (string, error) {
+	// loader.Import does not handle "." notation that means current package.
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	s := dir
+	file := filepath.Join(s, "go.mod")
+	for {
+		_, err := os.Stat(file)
+		if err == nil {
+			break
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		up := filepath.Dir(s)
+		if up == s {
+			return "", fmt.Errorf("go.mod is not exist")
+		}
+		s = up
+		file = filepath.Join(s, "go.mod")
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return "", err
+	}
+	modPath := modfile.ModulePath(data)
+	if modPath == "" {
+		return "", fmt.Errorf("%s: invalid go.mod syntax", file)
+	}
+	slug, err := filepath.Rel(s, dir)
+	if err != nil {
+		return "", err
+	}
+	return path.Join(modPath, filepath.ToSlash(slug)), nil
 }
 
 // Group returns a map of Stub indexed by filePath.
