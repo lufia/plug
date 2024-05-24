@@ -72,7 +72,7 @@ func lookupScope(s *Scope, frames []*frame) *Scope {
 	return lookupScope(p, frames)
 }
 
-// Delete deletes all objects that were bound by Set from s then deletes s itself from the package.
+// Delete deletes all objects that were bound by Set from s then deletes s itself from the internal state.
 func (s *Scope) Delete() {
 	clear(s.mocks)
 	for _, p := range s.refers {

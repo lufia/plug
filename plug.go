@@ -28,8 +28,8 @@ func (s *Symbol[T]) key() symbolKey {
 //
 // For example:
 //
-// 	- math/rand/v2.N
-// 	- http.Client.Do
+//   - math/rand/v2.N
+//   - net/http.Client.Do
 func Func[F any](name string, f F) *Symbol[F] {
 	var zero F
 	return &Symbol[F]{name, reflect.TypeOf(zero)}
@@ -48,7 +48,7 @@ func Get[T any](s *Symbol[T], dflt T) T {
 // CurrentScope returns the scope object that is strongly related to current calling stacks on the goroutine.
 //
 // When the scope becomes unnecessary the scope should be released through its Delete method.
-// Otherwise the scope and its objects will not be garbage collection because the package continues to kept them.
+// Otherwise the scope and its objects will not be garbage collection because the package continues to kept them in the internal state.
 func CurrentScope() *Scope {
 	return newScope(1)
 }
