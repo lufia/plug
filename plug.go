@@ -23,7 +23,7 @@ func (s *Symbol[T]) key() symbolKey {
 	return symbolKey(*s)
 }
 
-// Function returns a symbol constructed with both the name and the function is referenced to.
+// Func returns a symbol constructed with both the name and the function is referenced to.
 // The name syntax must be either $package.$function or $package.$type.$method.
 //
 // For example:
