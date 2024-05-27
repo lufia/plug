@@ -8,8 +8,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
+	"github.com/lufia/plug"
 	"golang.org/x/tools/go/ast/astutil"
 )
 
@@ -41,9 +43,15 @@ func Rewrite(stub *Stub) (string, error) {
 	return file, nil
 }
 
+func pkgPath(v any) string {
+	return reflect.TypeOf(v).PkgPath()
+}
+
 func rewriteFile(w io.Writer, stub *Stub) error {
 	fset := stub.f.pkg.c.Fset
-	astutil.AddImport(fset, stub.f.f, "github.com/lufia/plug")
+	if path := pkgPath(plug.Object{}); stub.f.pkg.path != path {
+		astutil.AddImport(fset, stub.f.f, path)
+	}
 
 	var buf bytes.Buffer
 	for _, fn := range stub.fns {
