@@ -52,9 +52,7 @@ func Example_netHttpClientDo() {
 }
 
 func TestOsGetpid(t *testing.T) {
-	scope := plug.CurrentScope()
-	t.Cleanup(scope.Delete)
-
+	scope := plug.CurrentScopeFor(t)
 	key := plug.Func("os.Getpid", os.Getpid)
 	plug.Set(scope, key, func() int {
 		return 1

@@ -11,6 +11,7 @@ package plug
 
 import (
 	"reflect"
+	"testing"
 )
 
 type symbolKey struct {
@@ -72,4 +73,11 @@ func Get[T any](scope *Scope, s *Symbol[T], dflt T, opts ...Option) T {
 // Otherwise the scope and its objects will not be garbage collection because the package continues to kept them in the internal state.
 func CurrentScope() *Scope {
 	return newScope(1)
+}
+
+// CurrentScopeFor is similar to [CurrentScope] except the scope will be automatically deleted on cleanup of t.
+func CurrentScopeFor(t testing.TB) *Scope {
+	scope := newScope(1)
+	t.Cleanup(scope.Delete)
+	return scope
 }
