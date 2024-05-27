@@ -103,7 +103,7 @@ func (s *Scope) get(key symbolKey, dflt any, recv any, params map[string]any) an
 	for s != &root {
 		obj := s.mocks[key]
 		if obj != nil {
-			obj.r.record(params)
+			obj.r.Record(params)
 			return obj.f
 		}
 		s = s.parent
