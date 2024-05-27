@@ -22,11 +22,11 @@ func TestScopeGeneric(t *testing.T) {
 	defer scope.Delete()
 
 	key := Func("put", put[int])
-	Set(key, func(int) {})
+	Set(scope, key, func(int) {})
 	if scope.mocks[key.key] == nil {
 		t.Errorf("scope[%v] = nil; but want non-nil", key)
 	}
-	f := Get(key, _put[int], nil, nil)
+	f := Get(scope, key, _put[int])
 	if v := reflect.ValueOf(f); v.IsZero() {
 		t.Errorf("got %v", v)
 	}

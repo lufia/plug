@@ -90,17 +90,19 @@ func rewriteFunc(w io.Writer, fn *Func) {
 	fmt.Fprint(w, ") (")
 	resultNames := printVars(w, sig.Results())
 	fmt.Fprintln(w, ") {")
+	fmt.Fprintln(w, "\tscope := plug.CurrentScope()")
+	fmt.Fprintln(w, "\tdefer scope.Delete()")
 	if len(typeParams) == 0 {
 		fmt.Fprintf(w, "\ts := plug.Func(%q, %s_%s)\n", fn.name, recvName, name)
-		fmt.Fprintf(w, "\tf := plug.Get(s, %s_%s, nil, map[string]any{\n", recvName, name)
+		fmt.Fprintf(w, "\tf := plug.Get(scope, s, %s_%s, plug.WithParams(map[string]any{\n", recvName, name)
 		recordParams(w, sig.Params())
-		fmt.Fprintln(w, "\t})")
+		fmt.Fprintln(w, "\t}))")
 	} else {
 		s := strings.Join(typeParams, ", ")
 		fmt.Fprintf(w, "\ts := plug.Func(%q, %s_%s[%s])\n", fn.name, recvName, name, s)
-		fmt.Fprintf(w, "\tf := plug.Get(s, %s_%s[%s], nil, map[string]any{\n", recvName, name, s)
+		fmt.Fprintf(w, "\tf := plug.Get(scope, s, %s_%s[%s], plug.WithParams(map[string]any{\n", recvName, name, s)
 		recordParams(w, sig.Params())
-		fmt.Fprintln(w, "\t})")
+		fmt.Fprintln(w, "\t}))")
 	}
 	if len(resultNames) == 0 {
 		fmt.Fprintf(w, "\tf(%s)\n", strings.Join(paramNames, ", "))

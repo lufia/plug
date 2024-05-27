@@ -91,6 +91,11 @@ func (s *Scope) Delete() {
 	s.parent = nil
 }
 
+type constraints struct {
+	recv   any
+	params map[string]any
+}
+
 func (s *Scope) set(key symbolKey, v any) *Object {
 	mustFunc(v)
 	obj := &Object{v, nullRecorder{}}
@@ -98,12 +103,12 @@ func (s *Scope) set(key symbolKey, v any) *Object {
 	return obj
 }
 
-func (s *Scope) get(key symbolKey, dflt any, recv any, params map[string]any) any {
+func (s *Scope) get(key symbolKey, dflt any, c *constraints) any {
 	mustFunc(dflt)
 	for s != &root {
 		obj := s.mocks[key]
 		if obj != nil {
-			obj.r.record(params)
+			obj.r.Record(c.params)
 			return obj.f
 		}
 		s = s.parent
