@@ -92,11 +92,15 @@ func rewriteFunc(w io.Writer, fn *Func) {
 	fmt.Fprintln(w, ") {")
 	if len(typeParams) == 0 {
 		fmt.Fprintf(w, "\ts := plug.Func(%q, %s_%s)\n", fn.name, recvName, name)
-		fmt.Fprintf(w, "\tf := plug.Get(s, %s_%s)\n", recvName, name)
+		fmt.Fprintf(w, "\tf := plug.Get(s, %s_%s, nil, map[string]any{\n", recvName, name)
+		recordParams(w, sig.Params())
+		fmt.Fprintln(w, "\t})")
 	} else {
 		s := strings.Join(typeParams, ", ")
 		fmt.Fprintf(w, "\ts := plug.Func(%q, %s_%s[%s])\n", fn.name, recvName, name, s)
-		fmt.Fprintf(w, "\tf := plug.Get(s, %s_%s[%s])\n", recvName, name, s)
+		fmt.Fprintf(w, "\tf := plug.Get(s, %s_%s[%s], nil, map[string]any{\n", recvName, name, s)
+		recordParams(w, sig.Params())
+		fmt.Fprintln(w, "\t})")
 	}
 	if len(resultNames) == 0 {
 		fmt.Fprintf(w, "\tf(%s)\n", strings.Join(paramNames, ", "))
@@ -117,6 +121,19 @@ func printVars(w io.Writer, vars *types.Tuple) []string {
 		fmt.Fprintf(w, "%s %s,", v.Name(), typeStr(v.Type()))
 	}
 	return a
+}
+
+func recordParams(w io.Writer, params *types.Tuple) {
+	if params == nil {
+		return
+	}
+	for i := range params.Len() {
+		v := params.At(i)
+		if v.Name() == "_" {
+			continue
+		}
+		fmt.Fprintf(w, "\t\t%[1]q: %[1]s,\n", v.Name())
+	}
 }
 
 func printTypeParams(w io.Writer, params *types.TypeParamList) []string {

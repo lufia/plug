@@ -73,3 +73,24 @@ func Example_mathRandV2N() {
 	fmt.Println(rand.N[int](10))
 	// Output: 3
 }
+
+func Example_recordGetenv() {
+	scope := plug.CurrentScope()
+	defer scope.Delete()
+
+	key := plug.Func("os.Getenv", os.Getenv)
+	var r plug.FuncRecorder[struct {
+		Key string
+	}]
+	key.SetRecorder(&r)
+	plug.Set(key, func(_ string) string {
+		return "dummy"
+	})
+
+	_ = os.Getenv("PATH")
+	fmt.Println(r.Count())
+	fmt.Println(r.At(0).Key)
+	// Output:
+	// 1
+	// PATH
+}
