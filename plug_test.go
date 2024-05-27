@@ -15,12 +15,12 @@ func TestFuncRecorder(t *testing.T) {
 	}
 	var r FuncRecorder[Params]
 	key := Func("dummy", fake)
-	Set(key, fake).SetRecorder(&r)
+	Set(scope, key, fake).SetRecorder(&r)
 
-	Get(key, fake, nil, map[string]any{
+	Get(scope, key, fake, WithParams(map[string]any{
 		"lat": 32.1,
 		"lng": -18.8,
-	})
+	}))
 	if n, w := r.Count(), 1; n != w {
 		t.Errorf("Count = %d; want %d", n, w)
 	}
