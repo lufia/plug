@@ -10,7 +10,16 @@ type Scope struct {
 	entry  uintptr
 	parent *Scope
 	refers map[uintptr]*Scope
-	mocks  map[symbolKey]any
+	mocks  map[symbolKey]*Object
+}
+
+type Object struct {
+	f any
+	r Recorder
+}
+
+func (obj *Object) SetRecorder(r Recorder) {
+	obj.r = r
 }
 
 type frame struct {
@@ -66,7 +75,7 @@ func lookupScope(s *Scope, frames []*frame) *Scope {
 		entry:  frame.entry,
 		parent: s,
 		refers: make(map[uintptr]*Scope),
-		mocks:  make(map[symbolKey]any),
+		mocks:  make(map[symbolKey]*Object),
 	}
 	s.refers[frame.entry] = p
 	return lookupScope(p, frames)
@@ -82,17 +91,20 @@ func (s *Scope) Delete() {
 	s.parent = nil
 }
 
-func (s *Scope) set(key symbolKey, v any) {
+func (s *Scope) set(key symbolKey, v any) *Object {
 	mustFunc(v)
-	s.mocks[key] = v
+	obj := &Object{v, nullRecorder{}}
+	s.mocks[key] = obj
+	return obj
 }
 
-func (s *Scope) get(key symbolKey, dflt any) any {
+func (s *Scope) get(key symbolKey, dflt any, recv any, params map[string]any) any {
 	mustFunc(dflt)
 	for s != &root {
-		v := s.mocks[key]
-		if v != nil {
-			return v
+		obj := s.mocks[key]
+		if obj != nil {
+			obj.r.record(params)
+			return obj.f
 		}
 		s = s.parent
 	}
