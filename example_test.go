@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/user"
+	"testing"
 	"time"
 
 	"github.com/lufia/plug"
@@ -50,6 +51,19 @@ func Example_netHttpClientDo() {
 	// Output: 200
 }
 
+func TestOsGetpid(t *testing.T) {
+	scope := plug.CurrentScope()
+	t.Cleanup(scope.Delete)
+
+	key := plug.Func("os.Getpid", os.Getpid)
+	plug.Set(key, func() int {
+		return 1
+	})
+	if w, pid := 1, os.Getpid(); pid != w {
+		t.Errorf("Getpid() = %d; want %d", pid, w)
+	}
+}
+
 func Example_osGetpid() {
 	scope := plug.CurrentScope()
 	defer scope.Delete()
@@ -72,4 +86,24 @@ func Example_mathRandV2N() {
 	})
 	fmt.Println(rand.N[int](10))
 	// Output: 3
+}
+
+func Example_recordGetenv() {
+	scope := plug.CurrentScope()
+	defer scope.Delete()
+
+	key := plug.Func("os.Getenv", os.Getenv)
+	var r plug.FuncRecorder[struct {
+		Key string
+	}]
+	plug.Set(key, func(_ string) string {
+		return "dummy"
+	}).SetRecorder(&r)
+
+	_ = os.Getenv("PATH")
+	fmt.Println(r.Count())
+	fmt.Println(r.At(0).Key)
+	// Output:
+	// 1
+	// PATH
 }

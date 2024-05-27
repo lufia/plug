@@ -82,10 +82,9 @@ func Example_recordGetenv() {
 	var r plug.FuncRecorder[struct {
 		Key string
 	}]
-	key.SetRecorder(&r)
 	plug.Set(key, func(_ string) string {
 		return "dummy"
-	})
+	}).SetRecorder(&r)
 
 	_ = os.Getenv("PATH")
 	fmt.Println(r.Count())
