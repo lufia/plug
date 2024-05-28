@@ -28,7 +28,12 @@ type Func struct {
 	name string // pkg/path.Object
 }
 
+var pkgCache = make(map[string]*Pkg)
+
 func LoadPackage(pkgPath string) (*Pkg, error) {
+	if pkg, ok := pkgCache[pkgPath]; ok {
+		return pkg, nil
+	}
 	c := loader.Config{
 		ParserMode: parser.ParseComments,
 	}
@@ -37,8 +42,9 @@ func LoadPackage(pkgPath string) (*Pkg, error) {
 	if err != nil {
 		return nil, err
 	}
-	pkg := p.Package(pkgPath)
-	return &Pkg{pkg, &c, pkgPath}, nil
+	pkg := &Pkg{p.Package(pkgPath), &c, pkgPath}
+	pkgCache[pkgPath] = pkg
+	return pkg, nil
 }
 
 func (pkg *Pkg) Lookup(sym *Sym) *Func {
@@ -68,7 +74,12 @@ func (pkg *Pkg) Lookup(sym *Sym) *Func {
 	return &Func{pkg, f.Name(), fn, sym.String()}
 }
 
+var fileCache = make(map[string]*File)
+
 func (pkg *Pkg) File(name string) *File {
+	if f, ok := fileCache[name]; ok {
+		return f
+	}
 	i := slices.IndexFunc(pkg.Files, func(e *ast.File) bool {
 		// e.Name is the name of the package.
 		// Thus we should get filename of e from token.FileSet.
@@ -78,8 +89,10 @@ func (pkg *Pkg) File(name string) *File {
 	if i < 0 {
 		return nil
 	}
-	f := pkg.Files[i]
-	return &File{pkg, f, pkg.c.Fset.File(f.Package).Name()}
+	fp := pkg.Files[i]
+	f := &File{pkg, fp, pkg.c.Fset.File(fp.Package).Name()}
+	fileCache[name] = f
+	return f
 }
 
 func (fn *Func) File() *File {
