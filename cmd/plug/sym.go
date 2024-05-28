@@ -6,6 +6,7 @@ import (
 	"go/build"
 	"go/token"
 	"go/types"
+	"slices"
 	"strings"
 
 	"golang.org/x/tools/go/loader"
@@ -54,6 +55,9 @@ func FindPlugSyms(pkgPath string) ([]*Sym, error) {
 			return nil, err
 		}
 		for s := range findPlugSyms(pkg, c.Fset, f, m) {
+			if slices.ContainsFunc(syms, func(v *Sym) bool { return *v == *s }) {
+				continue
+			}
 			syms = append(syms, s)
 		}
 	}

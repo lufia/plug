@@ -11,7 +11,6 @@ package plug
 
 import (
 	"reflect"
-	"testing"
 )
 
 type symbolKey struct {
@@ -75,8 +74,12 @@ func CurrentScope() *Scope {
 	return newScope(1)
 }
 
+type testingTB interface {
+	Cleanup(func())
+}
+
 // CurrentScopeFor is similar to [CurrentScope] except the scope will be automatically deleted on cleanup of t.
-func CurrentScopeFor(t testing.TB) *Scope {
+func CurrentScopeFor(t testingTB) *Scope {
 	scope := newScope(1)
 	t.Cleanup(scope.Delete)
 	return scope
