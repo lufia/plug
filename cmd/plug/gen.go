@@ -57,12 +57,12 @@ func rewriteFile(w io.Writer, stub *Stub) error {
 	for _, fn := range stub.fns {
 		rewriteFunc(&buf, fn)
 	}
+	if verbose {
+		fmt.Printf("====\n%s\n====\n", buf.Bytes())
+	}
 	s, err := format.Source(buf.Bytes())
 	if err != nil {
 		return err
-	}
-	if verbose {
-		fmt.Printf("====\n%s\n====\n", s)
 	}
 	if err := format.Node(w, fset, stub.f.f); err != nil {
 		return err
@@ -72,6 +72,7 @@ func rewriteFile(w io.Writer, stub *Stub) error {
 }
 
 func rewriteFunc(w io.Writer, fn *Func) {
+	pkg := fn.pkg.Pkg
 	name := fn.fn.Name()
 	fn.Rename("_" + name)
 
@@ -79,7 +80,7 @@ func rewriteFunc(w io.Writer, fn *Func) {
 	fmt.Fprint(w, "func ")
 	recvName := ""
 	if recv := sig.Recv(); recv != nil {
-		s := typeStr(recv.Type().Underlying())
+		s := typeStr(recv.Type().Underlying(), pkg)
 		fmt.Fprintf(w, "(%s %s) ", recv.Name(), s)
 		recvName = recv.Name() + "."
 		// TODO(lufia): sig.RecvTypeParams
@@ -89,14 +90,14 @@ func rewriteFunc(w io.Writer, fn *Func) {
 	var typeParams []string
 	if params := sig.TypeParams(); params != nil {
 		fmt.Fprint(w, "[")
-		typeParams = printTypeParams(w, params)
+		typeParams = printTypeParams(w, params, pkg)
 		fmt.Fprint(w, "]")
 	}
 
 	fmt.Fprint(w, "(")
-	paramNames := printVars(w, sig.Params())
+	paramNames := printVars(w, sig.Params(), pkg)
 	fmt.Fprint(w, ") (")
-	resultNames := printVars(w, sig.Results())
+	resultNames := printVars(w, sig.Results(), pkg)
 	fmt.Fprintln(w, ") {")
 	fmt.Fprintln(w, "\tscope := plug.CurrentScope()")
 	fmt.Fprintln(w, "\tdefer scope.Delete()")
@@ -120,7 +121,7 @@ func rewriteFunc(w io.Writer, fn *Func) {
 	fmt.Fprintln(w, "}")
 }
 
-func printVars(w io.Writer, vars *types.Tuple) []string {
+func printVars(w io.Writer, vars *types.Tuple, pkg *types.Package) []string {
 	if vars == nil {
 		return nil
 	}
@@ -128,7 +129,7 @@ func printVars(w io.Writer, vars *types.Tuple) []string {
 	for i := range vars.Len() {
 		v := vars.At(i)
 		a[i] = v.Name()
-		fmt.Fprintf(w, "%s %s,", v.Name(), typeStr(v.Type()))
+		fmt.Fprintf(w, "%s %s,", v.Name(), typeStr(v.Type(), pkg))
 	}
 	return a
 }
@@ -146,23 +147,40 @@ func recordParams(w io.Writer, params *types.Tuple) {
 	}
 }
 
-func printTypeParams(w io.Writer, params *types.TypeParamList) []string {
+func printTypeParams(w io.Writer, params *types.TypeParamList, pkg *types.Package) []string {
 	a := make([]string, params.Len())
 	for i := range params.Len() {
 		v := params.At(i)
 		a[i] = v.Obj().Name()
-		fmt.Fprintf(w, "%s %s,", v.Obj().Name(), typeStr(v.Constraint()))
+		fmt.Fprintf(w, "%s %s,", v.Obj().Name(), typeStr(v.Constraint(), pkg))
 	}
 	return a
 }
 
-func typeStr(t types.Type) string {
+func typeStr(t types.Type, pkg *types.Package) string {
 	switch v := t.(type) {
 	case *types.Named:
-		return types.TypeString(v, types.RelativeTo(v.Obj().Pkg()))
+		return types.TypeString(v, relativeNameTo(pkg))
 	case *types.Pointer:
-		return "*" + typeStr(v.Elem())
+		return "*" + typeStr(v.Elem(), pkg)
+	case *types.Basic:
+		return v.Name()
+	case *types.Slice:
+		return "[]" + typeStr(v.Elem(), pkg)
 	default:
-		return t.String()
+		fmt.Printf("%[1]T : %[1]v", t)
+		return "TX:" + t.String()
+	}
+}
+
+func relativeNameTo(pkg *types.Package) types.Qualifier {
+	if pkg == nil {
+		return nil
+	}
+	return func(other *types.Package) string {
+		if pkg == other {
+			return ""
+		}
+		return other.Name()
 	}
 }

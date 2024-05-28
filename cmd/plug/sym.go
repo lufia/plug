@@ -150,7 +150,7 @@ func parseExpr(info *types.Info, expr ast.Expr) (pkgName, typeName, funcName str
 
 func isPlugFunc(info *types.Info, call *ast.CallExpr) bool {
 	obj := typeutil.Callee(info, call)
-	if obj == nil {
+	if obj == nil || obj.Pkg() == nil {
 		return false
 	}
 	if obj.Pkg().Path() != "github.com/lufia/plug" || obj.Name() != "Func" {
