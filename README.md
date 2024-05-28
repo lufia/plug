@@ -1,6 +1,7 @@
 # plug
 
 Package plug replaces functions, defined in the other packages, on testing.
+The idea underlying this library was heavy inspired from [tenntenn/testtime][testtime].
 
 [![GoDev][godev-image]][godev-url]
 
@@ -25,3 +26,4 @@ plug
 
 [godev-image]: https://pkg.go.dev/badge/github.com/lufia/plug
 [godev-url]: https://pkg.go.dev/github.com/lufia/plug
+[testtime]: https://github.com/tenntenn/testtime
