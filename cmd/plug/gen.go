@@ -168,8 +168,7 @@ func typeStr(t types.Type, pkg *types.Package) string {
 	case *types.Slice:
 		return "[]" + typeStr(v.Elem(), pkg)
 	default:
-		fmt.Printf("%[1]T : %[1]v", t)
-		return "TX:" + t.String()
+		return t.String()
 	}
 }
 

@@ -1,34 +1,34 @@
 package plug
 
 import (
+	"os"
 	"testing"
+
+	"github.com/lufia/plug"
 )
 
 func TestFuncRecorder(t *testing.T) {
-	scope := CurrentScope()
-	t.Cleanup(scope.Delete)
-	fake := func() {}
+	scope := CurrentScopeFor(t)
 
-	type Params struct {
-		Lat float64 `plug:"lat"`
-		Lng float64 `plug:"lng"`
+	var r FuncRecorder[struct {
+		Key string `plug:"key"`
+	}]
+	key := Func("dummy", os.Getenv)
+	Set(scope, key, func(string) string {
+		return "/bin:/usr/bin"
+	}).SetRecorder(&r)
+
+	defaultGetenv := func(string) string {
+		return ""
 	}
-	var r FuncRecorder[Params]
-	key := Func("dummy", fake)
-	Set(scope, key, fake).SetRecorder(&r)
-
-	Get(scope, key, fake, WithParams(map[string]any{
-		"lat": 32.1,
-		"lng": -18.8,
-	}))
+	Get(scope, key, defaultGetenv, WithParams(map[string]any{
+		"key": "PATH",
+	}))("PATH")
 	if n, w := r.Count(), 1; n != w {
-		t.Errorf("Count = %d; want %d", n, w)
+		t.Fatalf("Count = %d; want %d", n, w)
 	}
 	params := r.At(0)
-	if w := 32.1; params.Lat != w {
-		t.Errorf("Lat = %v; want %v", params.Lat, w)
-	}
-	if w := -18.8; params.Lng != w {
-		t.Errorf("Lng = %v; want %v", params.Lng, w)
+	if w := "PATH"; params.Key != w {
+		t.Errorf("Key = %v; want %v", params.Key, w)
 	}
 }

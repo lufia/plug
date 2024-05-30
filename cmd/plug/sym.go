@@ -45,8 +45,6 @@ func FindPlugSyms(pkgPath string) ([]*Sym, error) {
 		return nil, fmt.Errorf("failed to load %s: %w", pkgPath, err)
 	}
 	pkg := p.Package(pkgPath) // TODO: ${pkgPath}_test
-	//m := pkg.Pkg.Imports()
-	//println("Imports:", len(m), m[1].Path(), m[1].Name())
 
 	var syms []*Sym
 	for _, f := range pkg.Files {
@@ -54,6 +52,7 @@ func FindPlugSyms(pkgPath string) ([]*Sym, error) {
 		if err != nil {
 			return nil, err
 		}
+		m[pkg.Pkg.Name()] = pkg.Pkg.Path()
 		for s := range findPlugSyms(pkg, c.Fset, f, m) {
 			if slices.ContainsFunc(syms, func(v *Sym) bool { return *v == *s }) {
 				continue
@@ -127,10 +126,13 @@ func parseExpr(info *types.Info, expr ast.Expr) (pkgName, typeName, funcName str
 		switch p := info.ObjectOf(t).(type) {
 		case *types.PkgName:
 			pkgName = p.Name()
-			return
+		case *types.Func:
+			pkgName = p.Pkg().Name()
+			funcName = p.Name()
+		default:
+			pkgName = t.Name
 		}
-		pkgName = t.Name
-		return pkgName, typeName, ""
+		return
 	case *ast.CompositeLit: // Type{}
 		return parseExpr(info, t.Type)
 	case *ast.ParenExpr: // (X)

@@ -105,7 +105,7 @@ func Group(syms []*Sym) map[string]*Stub {
 		}
 		fn := pkg.Lookup(sym)
 		if fn == nil {
-			log.Fatalf("%s is not exist\n", sym)
+			log.Fatalf("%s is not exist or is not exported\n", sym)
 		}
 		f := fn.File()
 		stub, ok := stubs[f.path]

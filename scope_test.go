@@ -1,32 +1,29 @@
 package plug
 
 import (
+	"math/rand/v2"
 	"reflect"
 	"testing"
 )
 
 func TestScopeGet(t *testing.T) {
-	scope := CurrentScope()
+	scope := CurrentScopeFor(t)
 	p := reflect.ValueOf(TestScopeGet).Pointer()
 	if scope.entry != p {
 		t.Errorf("Scope.entry = %v; want %v", scope.entry, p)
 	}
 }
 
-func put[T any](v T) {}
-
-func _put[T any](v T) {}
-
 func TestScopeGeneric(t *testing.T) {
-	scope := CurrentScope()
-	defer scope.Delete()
+	scope := CurrentScopeFor(t)
 
-	key := Func("put", put[int])
-	Set(scope, key, func(int) {})
-	if scope.mocks[key.key] == nil {
-		t.Errorf("scope[%v] = nil; but want non-nil", key)
-	}
-	f := Get(scope, key, _put[int])
+	key := Func("math/rand/v2.N", rand.N[int])
+	Set(scope, key, func(int) int {
+		return 0
+	})
+	f := Get(scope, key, func(int) int {
+		return 10
+	})
 	if v := reflect.ValueOf(f); v.IsZero() {
 		t.Errorf("got %v", v)
 	}
