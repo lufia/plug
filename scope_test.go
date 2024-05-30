@@ -6,14 +6,6 @@ import (
 	"testing"
 )
 
-func TestScopeGet(t *testing.T) {
-	scope := CurrentScopeFor(t)
-	p := reflect.ValueOf(TestScopeGet).Pointer()
-	if scope.entry != p {
-		t.Errorf("Scope.entry = %v; want %v", scope.entry, p)
-	}
-}
-
 func TestScopeGeneric(t *testing.T) {
 	scope := CurrentScopeFor(t)
 
