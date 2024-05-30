@@ -1,4 +1,4 @@
-package plug
+package plugcore
 
 import (
 	"os"
@@ -6,7 +6,8 @@ import (
 )
 
 func TestFuncRecorder(t *testing.T) {
-	scope := CurrentScopeFor(t)
+	scope := NewScope(1)
+	t.Cleanup(scope.Delete)
 
 	var r FuncRecorder[struct {
 		Key string `plug:"key"`
@@ -14,14 +15,14 @@ func TestFuncRecorder(t *testing.T) {
 	key := Func("dummy", os.Getenv)
 	Set(scope, key, func(string) string {
 		return "/bin:/usr/bin"
-	}).SetRecorder(&r)
+	}, nil, nil).SetRecorder(&r)
 
 	defaultGetenv := func(string) string {
 		return ""
 	}
-	Get(scope, key, defaultGetenv, WithParams(map[string]any{
+	Get(scope, key, defaultGetenv, nil, Params{
 		"key": "PATH",
-	}))("PATH")
+	})("PATH")
 	if n, w := r.Count(), 1; n != w {
 		t.Fatalf("Count = %d; want %d", n, w)
 	}

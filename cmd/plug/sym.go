@@ -44,20 +44,20 @@ func FindPlugSyms(pkgPath string) ([]*Sym, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load %s: %w", pkgPath, err)
 	}
-	pkg := p.Package(pkgPath) // TODO: ${pkgPath}_test
-
 	var syms []*Sym
-	for _, f := range pkg.Files {
-		m, err := importMap(f)
-		if err != nil {
-			return nil, err
-		}
-		m[pkg.Pkg.Name()] = pkg.Pkg.Path()
-		for s := range findPlugSyms(pkg, c.Fset, f, m) {
-			if slices.ContainsFunc(syms, func(v *Sym) bool { return *v == *s }) {
-				continue
+	for _, pkg := range p.InitialPackages() {
+		for _, f := range pkg.Files {
+			m, err := importMap(f)
+			if err != nil {
+				return nil, err
 			}
-			syms = append(syms, s)
+			m[pkg.Pkg.Name()] = pkg.Pkg.Path()
+			for s := range findPlugSyms(pkg, c.Fset, f, m) {
+				if slices.ContainsFunc(syms, func(v *Sym) bool { return *v == *s }) {
+					continue
+				}
+				syms = append(syms, s)
+			}
 		}
 	}
 	return syms, nil

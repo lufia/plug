@@ -11,7 +11,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/lufia/plug"
+	"github.com/lufia/plug/plugcore"
 	"golang.org/x/tools/go/ast/astutil"
 )
 
@@ -49,9 +49,8 @@ func pkgPath(v any) string {
 
 func rewriteFile(w io.Writer, stub *Stub) error {
 	fset := stub.f.pkg.c.Fset
-	if path := pkgPath(plug.Object{}); stub.f.pkg.path != path {
-		astutil.AddImport(fset, stub.f.f, path)
-	}
+	path := pkgPath(plugcore.Object{})
+	astutil.AddImport(fset, stub.f.f, path)
 
 	var buf bytes.Buffer
 	for _, fn := range stub.fns {
@@ -99,19 +98,19 @@ func rewriteFunc(w io.Writer, fn *Func) {
 	fmt.Fprint(w, ") (")
 	resultNames := printVars(w, sig.Results(), pkg)
 	fmt.Fprintln(w, ") {")
-	fmt.Fprintln(w, "\tscope := plug.CurrentScope()")
+	fmt.Fprintln(w, "\tscope := plugcore.NewScope(1)")
 	fmt.Fprintln(w, "\tdefer scope.Delete()")
 	if len(typeParams) == 0 {
-		fmt.Fprintf(w, "\ts := plug.Func(%q, %s_%s)\n", fn.name, recvName, name)
-		fmt.Fprintf(w, "\tf := plug.Get(scope, s, %s_%s, plug.WithParams(map[string]any{\n", recvName, name)
+		fmt.Fprintf(w, "\ts := plugcore.Func(%q, %s_%s)\n", fn.name, recvName, name)
+		fmt.Fprintf(w, "\tf := plugcore.Get(scope, s, %s_%s, nil, plugcore.Params{\n", recvName, name)
 		recordParams(w, sig.Params())
-		fmt.Fprintln(w, "\t}))")
+		fmt.Fprintln(w, "\t})")
 	} else {
 		s := strings.Join(typeParams, ", ")
-		fmt.Fprintf(w, "\ts := plug.Func(%q, %s_%s[%s])\n", fn.name, recvName, name, s)
-		fmt.Fprintf(w, "\tf := plug.Get(scope, s, %s_%s[%s], plug.WithParams(map[string]any{\n", recvName, name, s)
+		fmt.Fprintf(w, "\ts := plugcore.Func(%q, %s_%s[%s])\n", fn.name, recvName, name, s)
+		fmt.Fprintf(w, "\tf := plugcore.Get(scope, s, %s_%s[%s], nil, plugcore.Params{\n", recvName, name, s)
 		recordParams(w, sig.Params())
-		fmt.Fprintln(w, "\t}))")
+		fmt.Fprintln(w, "\t})")
 	}
 	if len(resultNames) == 0 {
 		fmt.Fprintf(w, "\tf(%s)\n", strings.Join(paramNames, ", "))

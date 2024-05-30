@@ -10,17 +10,14 @@
 package plug
 
 import (
-	"reflect"
+	"github.com/lufia/plug/plugcore"
 )
 
-type symbolKey struct {
-	name string
-	t    reflect.Type
-}
-
 // Symbol represents an object that will be replaced.
-type Symbol[T any] struct {
-	key symbolKey
+type Symbol[T any] plugcore.Symbol[T]
+
+func (s *Symbol[T]) core() *plugcore.Symbol[T] {
+	return (*plugcore.Symbol[T])(s)
 }
 
 // Func returns a symbol constructed with both the name and the function is referenced to.
@@ -31,8 +28,12 @@ type Symbol[T any] struct {
 //   - math/rand/v2.N
 //   - net/http.Client.Do
 func Func[F any](name string, f F) *Symbol[F] {
-	key := symbolKey{name, reflect.TypeOf(f)}
-	return &Symbol[F]{key}
+	return (*Symbol[F])(plugcore.Func(name, f))
+}
+
+type constraints struct {
+	recv   any
+	params plugcore.Params
 }
 
 // Option represents the constraints for [Get] or [Set].
@@ -56,14 +57,14 @@ func Set[T any](scope *Scope, s *Symbol[T], v T, opts ...Option) *Object {
 	applyOptions(&c, opts...)
 	// TODO(lufia): scope.set will become to receive c.
 
-	return scope.set(s.key, v)
+	return (*Object)(plugcore.Set(scope.core(), s.core(), v, c.recv, c.params))
 }
 
 // Get returns an object that is bound to s, or dflt if s is bound nothing.
 func Get[T any](scope *Scope, s *Symbol[T], dflt T, opts ...Option) T {
 	var c constraints
 	applyOptions(&c, opts...)
-	return scope.get(s.key, dflt, &c).(T)
+	return plugcore.Get(scope.core(), s.core(), dflt, c.recv, c.params)
 }
 
 // CurrentScope returns the scope object that is strongly related to current calling stacks on the goroutine.
@@ -71,7 +72,7 @@ func Get[T any](scope *Scope, s *Symbol[T], dflt T, opts ...Option) T {
 // When the scope becomes unnecessary the scope should be released through [Scope.Delete] method.
 // Otherwise the scope and its objects will not be garbage collection because the package continues to kept them in the internal state.
 func CurrentScope() *Scope {
-	return newScope(1)
+	return (*Scope)(plugcore.NewScope(1))
 }
 
 type testingTB interface {
@@ -80,7 +81,7 @@ type testingTB interface {
 
 // CurrentScopeFor is similar to [CurrentScope] except the scope will be automatically deleted on cleanup of t.
 func CurrentScopeFor(t testingTB) *Scope {
-	scope := newScope(1)
+	scope := plugcore.NewScope(1)
 	t.Cleanup(scope.Delete)
-	return scope
+	return (*Scope)(scope)
 }
