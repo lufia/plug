@@ -3,7 +3,23 @@ package plug
 import (
 	"os"
 	"testing"
+
+	"rsc.io/quote/v3"
 )
+
+func TestFunc_replacingThirdPartyPackage(t *testing.T) {
+	scope := CurrentScopeFor(t)
+	key := Func("rsc.io/quote/v3.HelloV3", quote.HelloV3)
+	Set(scope, key, func() string {
+		return "quote"
+	})
+	f := Get(scope, key, func() string {
+		return "default"
+	})
+	if s := f(); s != "quote" {
+		t.Errorf("%s = %v; want quote", key, s)
+	}
+}
 
 func TestFuncRecorder(t *testing.T) {
 	scope := CurrentScopeFor(t)
