@@ -16,6 +16,10 @@ type Symbol[T any] struct {
 	key symbolKey
 }
 
+func (s *Symbol[T]) String() string {
+	return s.key.name
+}
+
 // Func returns a symbol constructed with both the name and the function is referenced to.
 // The name syntax must be either $package.$function or $package.$type.$method.
 //

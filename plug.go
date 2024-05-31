@@ -75,6 +75,11 @@ func CurrentScope() *Scope {
 	return (*Scope)(plugcore.NewScope(1))
 }
 
+// CurrentScopeOn likes [CurrentScope] except it returns Scope that continues from scope even if the current function stack is separated.
+func CurrentScopeOn(scope *Scope) *Scope {
+	return (*Scope)(plugcore.NewScopeFrom(scope.core(), 1))
+}
+
 type testingTB interface {
 	Cleanup(func())
 }

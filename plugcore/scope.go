@@ -8,6 +8,7 @@ import (
 
 type Scope struct {
 	entry  uintptr
+	name   string
 	parent *Scope
 	refers map[uintptr]*Scope
 	mocks  map[symbolKey]*Object
@@ -38,6 +39,7 @@ type frame struct {
 	file  string
 	line  int
 	entry uintptr
+	name  string
 }
 
 var root Scope
@@ -49,9 +51,13 @@ func init() {
 }
 
 func NewScope(skip int) *Scope {
+	return NewScopeFrom(&root, skip+1)
+}
+
+func NewScopeFrom(parent *Scope, skip int) *Scope {
 	frames := getFrames(skip + 1)
 	slices.Reverse(frames)
-	return lookupScope(&root, frames)
+	return lookupScope(parent, frames)
 }
 
 func getFrames(skip int) []*frame {
@@ -67,12 +73,20 @@ func getFrames(skip int) []*frame {
 			file:  f.File,
 			line:  f.Line,
 			entry: f.Entry,
+			name:  funcName(f),
 		})
 		if !more {
 			break
 		}
 	}
 	return a
+}
+
+func funcName(f runtime.Frame) string {
+	if f.Func == nil {
+		return "(anonymous)"
+	}
+	return f.Func.Name()
 }
 
 func lookupScope(s *Scope, frames []*frame) *Scope {
@@ -86,22 +100,33 @@ func lookupScope(s *Scope, frames []*frame) *Scope {
 	}
 	p := &Scope{
 		entry:  frame.entry,
+		name:   frame.name,
 		parent: s,
 		refers: make(map[uintptr]*Scope),
 		mocks:  make(map[symbolKey]*Object),
+		ref:    0,
 	}
 	s.refers[frame.entry] = p
 	return lookupScope(p, frames)
 }
 
+const doubleDeleteMessage = "double delete or corruption"
+
 // Delete deletes all objects that were bound by Set from s then deletes s itself from the internal state.
 func (s *Scope) Delete() {
+	if s.ref == 0 {
+		panic(doubleDeleteMessage)
+	}
 	if n := s.decref(); n > 0 {
 		return
 	}
+	s.destroy()
+}
+
+func (s *Scope) destroy() {
 	clear(s.mocks)
 	for _, p := range s.refers {
-		p.Delete()
+		p.destroy()
 	}
 	delete(s.parent.refers, s.entry)
 	s.parent = nil
