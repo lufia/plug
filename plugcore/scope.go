@@ -61,9 +61,7 @@ func NewScopeFrom(parent *Scope, skip int) *Scope {
 }
 
 func getFrames(skip int) []*frame {
-	pc := make([]uintptr, 100)       // TODO: grow
-	n := runtime.Callers(skip+2, pc) // +1: Callers, +1: getFrames
-	pc = pc[:n]
+	pc := getCallers(skip + 1)
 	frames := runtime.CallersFrames(pc)
 
 	a := make([]*frame, 0, len(pc))
@@ -80,6 +78,17 @@ func getFrames(skip int) []*frame {
 		}
 	}
 	return a
+}
+
+func getCallers(skip int) []uintptr {
+	pc := make([]uintptr, 1)
+	for {
+		n := runtime.Callers(skip+2, pc) // +1: Callers, +1: getCallers
+		if n < len(pc) {
+			return pc[:n]
+		}
+		pc = make([]uintptr, len(pc)*2)
+	}
 }
 
 func funcName(f runtime.Frame) string {
