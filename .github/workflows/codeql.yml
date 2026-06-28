@@ -1,0 +1,35 @@
+name: CodeQL
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+  schedule:
+  - cron: '17 2 * * 6'
+jobs:
+  analyze:
+    permissions:
+      security-events: write
+    strategy:
+      matrix:
+        language:
+        - go
+        - actions
+        include:
+        - build-mode: none
+        - build-mode: manual
+          language: go
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+    - uses: lufia/workflows/.github/actions/setup-codeql@bfc84184198b340bf1c34b2c695c2810a8e0897e # v0.11.1
+      with:
+        language: ${{ matrix.language }}
+        build-mode: ${{ matrix.build-mode }}
+    - run: go build ./...
+      if: matrix.language == 'go'
+    - uses: lufia/workflows/.github/actions/codeql@bfc84184198b340bf1c34b2c695c2810a8e0897e # v0.11.1
+      with:
+        language: ${{ matrix.language }}

@@ -1,0 +1,10 @@
+name: Vulncheck
+
+on:
+  schedule:
+  - cron: '0 10 */14 * *'
+permissions:
+  contents: read
+jobs:
+  vuln:
+    uses: lufia/workflows/.github/workflows/go-vulncheck.yml@bfc84184198b340bf1c34b2c695c2810a8e0897e # v0.11.1
