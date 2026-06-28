@@ -1,10 +1,10 @@
 module github.com/lufia/plug
 
-go 1.22.3
+go 1.25.0
 
 require (
-	golang.org/x/mod v0.17.0
-	golang.org/x/tools v0.21.0
+	golang.org/x/mod v0.37.0
+	golang.org/x/tools v0.46.0
 	rsc.io/quote/v3 v3.1.0
 )
 
