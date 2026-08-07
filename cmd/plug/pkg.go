@@ -11,8 +11,17 @@ import (
 
 type Pkg struct {
 	*loader.PackageInfo
-	c    *loader.Config
-	path string
+	c       *loader.Config
+	path    string
+	version string // If it is empty, maybe it is the stdlib
+}
+
+func (pkg *Pkg) PathVersion() string {
+	s := pkg.path
+	if v := pkg.version; v != "" {
+		s += "@" + v
+	}
+	return s
 }
 
 type File struct {
@@ -30,7 +39,7 @@ type Func struct {
 
 var pkgCache = make(map[string]*Pkg)
 
-func LoadPackage(pkgPath string) (*Pkg, error) {
+func LoadPackage(pkgPath, modVersion string) (*Pkg, error) {
 	if pkg, ok := pkgCache[pkgPath]; ok {
 		return pkg, nil
 	}
@@ -42,7 +51,7 @@ func LoadPackage(pkgPath string) (*Pkg, error) {
 	if err != nil {
 		return nil, err
 	}
-	pkg := &Pkg{p.Package(pkgPath), &c, pkgPath}
+	pkg := &Pkg{p.Package(pkgPath), &c, pkgPath, modVersion}
 	pkgCache[pkgPath] = pkg
 	return pkg, nil
 }

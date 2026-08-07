@@ -2,17 +2,22 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/format"
 	"go/types"
 	"io"
+	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 
-	"github.com/lufia/plug/plugcore"
 	"golang.org/x/tools/go/ast/astutil"
+
+	"github.com/lufia/plug/plugcore"
 )
 
 type Stub struct { // Plug?
@@ -23,11 +28,25 @@ type Stub struct { // Plug?
 func Rewrite(stub *Stub) (string, error) {
 	filePath := stub.f.path
 	name := filepath.Base(filePath)
-	dir := filepath.Join("plug", stub.f.pkg.path)
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get cachedir: %w", err)
+	}
+	dir := filepath.Join(cacheDir, "plug", runtime.Version(), stub.f.pkg.PathVersion())
 	if err := os.MkdirAll(dir, 0755); err != nil && !os.IsExist(err) {
 		return "", fmt.Errorf("failed to create %s: %w", dir, err)
 	}
+	if verbose {
+		log.Printf("cachedir: %s\n", dir)
+	}
 	file := filepath.Join(dir, name)
+	_, err = os.Stat(file)
+	if err == nil {
+		return file, nil
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return "", fmt.Errorf("failed to stat %s: %w", file, err)
+	}
 	w, err := os.Create(file)
 	if err != nil {
 		return "", fmt.Errorf("failed to create %s: %w", file, err)
@@ -43,13 +62,9 @@ func Rewrite(stub *Stub) (string, error) {
 	return file, nil
 }
 
-func pkgPath(v any) string {
-	return reflect.TypeOf(v).PkgPath()
-}
-
 func rewriteFile(w io.Writer, stub *Stub) error {
 	fset := stub.f.pkg.c.Fset
-	path := pkgPath(plugcore.Object{})
+	path := reflect.TypeOf(plugcore.Object{}).PkgPath()
 	astutil.AddImport(fset, stub.f.f, path)
 
 	var buf bytes.Buffer
@@ -57,7 +72,7 @@ func rewriteFile(w io.Writer, stub *Stub) error {
 		rewriteFunc(&buf, fn)
 	}
 	if verbose {
-		fmt.Printf("====\n%s\n====\n", buf.Bytes())
+		log.Printf("====\n%s\n====\n", buf.Bytes())
 	}
 	s, err := format.Source(buf.Bytes())
 	if err != nil {

@@ -33,7 +33,7 @@ func main() {
 	flag.BoolVar(&verbose, "v", false, "enable verbose log")
 	flag.Parse()
 
-	pkgPath, err := loadPackagePath(".")
+	pkgPath, modVers, err := loadPackagePath(".")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	stubs := Group(syms)
+	stubs := Group(syms, modVers)
 
 	var o Overlay
 	for filePath, stub := range stubs {
@@ -56,11 +56,11 @@ func main() {
 	}
 }
 
-func loadPackagePath(dir string) (string, error) {
+func loadPackagePath(dir string) (string, map[string]string, error) {
 	// loader.Import does not handle "." notation that means current package.
 	dir, err := filepath.Abs(dir)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	s := dir
 	file := filepath.Join(s, "go.mod")
@@ -70,36 +70,47 @@ func loadPackagePath(dir string) (string, error) {
 			break
 		}
 		if !os.IsNotExist(err) {
-			return "", err
+			return "", nil, err
 		}
 		up := filepath.Dir(s)
 		if up == s {
-			return "", fmt.Errorf("go.mod is not exist")
+			return "", nil, fmt.Errorf("go.mod is not exist")
 		}
 		s = up
 		file = filepath.Join(s, "go.mod")
 	}
 	data, err := os.ReadFile(file)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	modPath := modfile.ModulePath(data)
+
+	f, err := modfile.Parse(file, data, nil)
+	if err != nil {
+		return "", nil, err
+	}
+	modPath := f.Module.Mod.Path
 	if modPath == "" {
-		return "", fmt.Errorf("%s: invalid go.mod syntax", file)
+		return "", nil, fmt.Errorf("%s: invalid go.mod syntax", file)
 	}
 	slug, err := filepath.Rel(s, dir)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return path.Join(modPath, filepath.ToSlash(slug)), nil
+	pkgPath := path.Join(modPath, filepath.ToSlash(slug))
+
+	modVers := make(map[string]string)
+	for _, r := range f.Require {
+		modVers[r.Mod.Path] = r.Mod.Version
+	}
+	return pkgPath, modVers, nil
 }
 
 // Group returns a map of Stub indexed by filePath.
-func Group(syms []*Sym) map[string]*Stub {
+func Group(syms []*Sym, modVers map[string]string) map[string]*Stub {
 	stubs := make(map[string]*Stub)
 	for _, sym := range syms {
 		pkgPath := sym.PkgPath()
-		pkg, err := LoadPackage(pkgPath)
+		pkg, err := LoadPackage(pkgPath, modVers[pkgPath])
 		if err != nil {
 			log.Fatalf("failed to load package %s: %v\n", pkgPath, err)
 		}
