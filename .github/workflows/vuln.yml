@@ -7,4 +7,4 @@ permissions:
   contents: read
 jobs:
   vuln:
-    uses: lufia/workflows/.github/workflows/go-vulncheck.yml@bfc84184198b340bf1c34b2c695c2810a8e0897e # v0.11.1
+    uses: lufia/workflows/.github/workflows/go-vulncheck.yml@87182a21e45d32572eea26d16b42baf1e5da0537 # v0.12.0
